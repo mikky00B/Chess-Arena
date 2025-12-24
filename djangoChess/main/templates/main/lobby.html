@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Chess Lobby</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+</head>
+<body class="container mt-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Chess Platform Lobby</h1>
+        <div>
+            <span>Welcome, <strong>{{ request.user.username }}</strong>!</span>
+            <span class="badge bg-secondary ms-2">Your Rating: {{ request.user.profile.rating }}</span>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <a href="{% url 'create_game' %}" class="btn btn-primary mb-4">Create New Game</a>
+
+            <h3>Open Challenges</h3>
+            <ul class="list-group mb-4">
+                {% for game in open_games %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span>
+                            Game by <strong>{{ game.white_player.username }}</strong>
+                            <small class="text-muted ms-2">({{ game.white_player.profile.rating }})</small>
+                        </span>
+                        <a href="{% url 'join_game' game.id %}" class="btn btn-sm btn-success">Join as Black</a>
+                    </li>
+                {% empty %}
+                    <li class="list-group-item text-muted">No open games. Start one!</li>
+                {% endfor %}
+            </ul>
+
+            <h3>Your Active Games</h3>
+            <ul class="list-group">
+                {% for game in my_games %}
+                    <li class="list-group-item">
+                        <a href="{% url 'game_detail' game.id %}" class="text-decoration-none">
+                            <strong>Game #{{ game.id }}</strong>: vs 
+                            {% if game.white_player == request.user %}
+                                {{ game.black_player.username|default:"Waiting for opponent..." }}
+                            {% else %}
+                                {{ game.white_player.username }}
+                            {% endif %}
+                            <span class="float-end badge bg-info text-dark">Play Move</span>
+                        </a>
+                    </li>
+                {% empty %}
+                    <li class="list-group-item text-muted">You have no active games.</li>
+                {% endfor %}
+            </ul>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-warning text-dark font-weight-bold">
+                    🏆 Global Leaderboard
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>#</th>
+                                <th>Player</th>
+                                <th class="text-end">ELO</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for profile in leaderboard %}
+                            <tr {% if profile.user == request.user %}class="table-info"{% endif %}>
+                                <td>{{ forloop.counter }}</td>
+                                <td>{{ profile.user.username }}</td>
+                                <td class="text-end"><strong>{{ profile.rating }}</strong></td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="3" class="text-center text-muted">No rankings available</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

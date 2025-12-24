@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Chess Platform - Game #{{ game.id }}</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
+    <style>
+        #moveHistory, #chatLog { border: 1px solid #ccc; background: #f8f9fa; padding: 10px; overflow-y: scroll; }
+        #moveHistory { height: 200px; }
+        #chatLog { height: 150px; background: white; }
+        .timer-box { font-family: monospace; font-size: 2rem; font-weight: bold; padding: 10px; border-radius: 5px; background: #333; color: #fff; margin-bottom: 10px; }
+        .timer-active { background: #28a745 !important; border: 2px solid #fff; box-shadow: 0 0 10px #28a745; }
+        
+        #myBoard { background-color: #dee2e6; border-radius: 4px; overflow: hidden; }
+
+        /* Prevents Bootstrap from squishing images */
+        .piece-417db {
+            max-width: none !important;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <div class="container py-4">
+        <div class="row">
+            <div class="col-lg-7">
+                <div class="card shadow-sm mb-3 text-center p-3">
+                    <h5 id="opponent-name" class="text-muted">
+                        Opponent: {% if game.white_player == request.user %}{{ game.black_player.username|default:"Waiting..." }}{% else %}{{ game.white_player.username }}{% endif %}
+                    </h5>
+
+                    <div id="black-timer-container" class="timer-box mt-2">
+                        Black: <span id="black-clock">00:00</span>
+                    </div>
+
+                    <div id="myBoard" class="mx-auto" style="width: 100%; max-width: 450px;"></div>
+                    
+                    <div id="white-timer-container" class="timer-box mt-3">
+                        White: <span id="white-clock">00:00</span>
+                    </div>
+
+                    <div class="mt-2 d-flex justify-content-center gap-2">
+                        <span id="status" class="badge bg-secondary p-2">Connecting...</span>
+                        <button id="resignBtn" class="btn btn-danger btn-sm">Resign</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-5">
+                <div class="card shadow-sm mb-3">
+                    <div class="card-header bg-dark text-white">Move History</div>
+                    <div id="moveHistory">
+                        <ol id="moveList" class="ps-4 mt-2">
+                            {% for move in game.moves.all %}<li>{{ move.move_san }}</li>{% endfor %}
+                        </ol>
+                    </div>
+                </div>
+
+                <div class="card shadow-sm">
+                    <div class="card-header bg-primary text-white">Game Chat</div>
+                    <div class="card-body p-2">
+                        <div id="chatLog"></div>
+                        <div class="input-group mt-2">
+                            <input id="chatInput" type="text" class="form-control" placeholder="Send a message...">
+                            <button id="chatSend" class="btn btn-primary">Send</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="promotionModal" data-bs-backdrop="static" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-sm modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title w-100 text-center">Promote Pawn</h5>
+                </div>
+                <div class="modal-body d-flex justify-content-around">
+                    <button class="btn btn-outline-primary" onclick="selectPromotion('q')">Q</button>
+                    <button class="btn btn-outline-primary" onclick="selectPromotion('r')">R</button>
+                    <button class="btn btn-outline-primary" onclick="selectPromotion('b')">B</button>
+                    <button class="btn btn-outline-primary" onclick="selectPromotion('n')">N</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+    
+    <script>
+        const gameId = "{{ game.id }}";
+        const user = "{{ request.user.username }}";
+        const whitePlayer = "{{ game.white_player.username }}";
+        const hasBlackPlayer = "{{ game.black_player }}" !== "None" && "{{ game.black_player }}" !== "";
+        
+        let whiteTimeSeconds = parseFloat("{{ game.white_time }}");
+        let blackTimeSeconds = parseFloat("{{ game.black_time }}");
+        let activeTurn = ""; 
+        let timerInterval = null;
+        let isGameOver = "{{ game.is_active }}" === "False";
+        
+        // Promotion state
+        let pendingMove = null;
+        const promotionModal = new bootstrap.Modal(document.getElementById('promotionModal'));
+
+        const chatSocket = new WebSocket('ws://' + window.location.host + '/ws/chess/' + gameId + '/');
+
+        function pieceTheme(piece) {
+            const base = 'https://upload.wikimedia.org/wikipedia/commons/';
+            const pieces = {
+                'wK': '4/42/Chess_klt45.svg', 'wQ': '1/15/Chess_qlt45.svg', 'wR': '7/72/Chess_rlt45.svg',
+                'wB': 'b/b1/Chess_blt45.svg', 'wN': '7/70/Chess_nlt45.svg', 'wP': '4/45/Chess_plt45.svg',
+                'bK': 'f/f0/Chess_kdt45.svg', 'bQ': '4/47/Chess_qdt45.svg', 'bR': 'f/ff/Chess_rdt45.svg',
+                'bB': '9/98/Chess_bdt45.svg', 'bN': 'e/ef/Chess_ndt45.svg', 'bP': 'c/c7/Chess_pdt45.svg'
+            };
+            return base + pieces[piece];
+        }
+
+        function formatTime(seconds) {
+            if (seconds <= 0) return "00:00";
+            const m = Math.floor(seconds / 60);
+            const s = Math.floor(seconds % 60);
+            return (m < 10 ? "0" : "") + m + ":" + (s < 10 ? "0" : "") + s;
+        }
+
+        function updateClockUI() {
+            document.getElementById('white-clock').innerText = formatTime(whiteTimeSeconds);
+            document.getElementById('black-clock').innerText = formatTime(blackTimeSeconds);
+            if (!isGameOver) {
+                document.getElementById('white-timer-container').classList.toggle('timer-active', activeTurn === 'white');
+                document.getElementById('black-timer-container').classList.toggle('timer-active', activeTurn === 'black');
+            }
+        }
+
+        function startTicking() {
+            if (timerInterval) clearInterval(timerInterval);
+            if (!hasBlackPlayer || isGameOver) return;
+            timerInterval = setInterval(() => {
+                if (activeTurn === 'white') { whiteTimeSeconds--; } 
+                else { blackTimeSeconds--; }
+                updateClockUI();
+                if (whiteTimeSeconds <= 0 || blackTimeSeconds <= 0) {
+                    clearInterval(timerInterval);
+                    document.getElementById('status').innerText = "Time Expired";
+                }
+            }, 1000);
+        }
+
+        function selectPromotion(choice) {
+            if (pendingMove) {
+                chatSocket.send(JSON.stringify({ 
+                    'type': 'move', 
+                    'move': pendingMove.source + pendingMove.target + choice 
+                }));
+                pendingMove = null;
+                promotionModal.hide();
+            }
+        }
+
+        function onDrop(source, target, piece) {
+            if (isGameOver) return 'snapback';
+
+            // Check if it's a promotion move
+            const isPromotion = (piece === 'wP' && target[1] === '8') || 
+                                (piece === 'bP' && target[1] === '1');
+
+            if (isPromotion) {
+                pendingMove = { source, target };
+                promotionModal.show();
+                // Return 'snapback' to clear the piece visual, 
+                // it will be replaced when the socket move comes back
+                return 'snapback';
+            }
+
+            chatSocket.send(JSON.stringify({ 'type': 'move', 'move': source + target }));
+        }
+
+        chatSocket.onmessage = function(e) {
+            const data = JSON.parse(e.data);
+            
+            if (data.error) {
+                alert(data.error);
+                board.position(board.fen()); 
+                return;
+            }
+
+            if (data.type === "move") {
+                board.position(data.fen);
+                whiteTimeSeconds = data.white_time;
+                blackTimeSeconds = data.black_time;
+                activeTurn = data.fen.split(" ")[1] === "w" ? "white" : "black";
+                
+                const li = document.createElement('li');
+                li.innerText = data.move;
+                document.getElementById('moveList').appendChild(li);
+                
+                if (data.outcome) {
+                    isGameOver = true;
+                    document.getElementById('status').innerText = "Game Over: " + data.outcome;
+                    clearInterval(timerInterval);
+                }
+                updateClockUI();
+                startTicking();
+            }
+
+            if (data.type === "game_over") {
+                isGameOver = true;
+                clearInterval(timerInterval);
+                alert("Game Over: " + data.outcome + "\nWinner: " + data.winner);
+                document.getElementById('status').innerText = "Winner: " + data.winner;
+            }
+
+            if (data.type === "chat") {
+                const log = document.getElementById('chatLog');
+                log.innerHTML += `<div><strong>${data.player}:</strong> ${data.message}</div>`;
+                log.scrollTop = log.scrollHeight;
+            }
+        };
+
+        const config = {
+            draggable: true,
+            position: "{{ game.current_fen }}",
+            orientation: (user === whitePlayer) ? 'white' : 'black',
+            onDrop: onDrop,
+            pieceTheme: pieceTheme
+        };
+        const board = Chessboard('myBoard', config);
+
+        document.getElementById('chatSend').onclick = () => {
+            const el = document.getElementById('chatInput');
+            if (el.value) {
+                chatSocket.send(JSON.stringify({ 'type': 'chat', 'message': el.value }));
+                el.value = '';
+            }
+        };
+
+        document.getElementById('resignBtn').onclick = () => {
+            if (confirm("Are you sure you want to resign?")) {
+                chatSocket.send(JSON.stringify({ 'type': 'resign' }));
+            }
+        };
+
+        // Initialize state
+        activeTurn = "{{ game.current_fen }}".split(" ")[1] === "w" ? "white" : "black";
+        updateClockUI();
+        startTicking();
+        chatSocket.onopen = () => document.getElementById('status').innerText = "Connected";
+    </script>
+</body>
+</html>
