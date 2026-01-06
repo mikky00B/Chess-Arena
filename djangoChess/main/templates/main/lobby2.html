@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Chess Lobby | Web3 Store</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen font-sans">
+
+    <nav class="border-b border-gray-800 p-4 bg-gray-900 sticky top-0 z-50">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-black tracking-tighter text-blue-500">CHESS<span class="text-white">DAPP</span></h1>
+            <div class="flex items-center gap-4">
+                <div class="text-right">
+                    <p class="text-sm font-bold">{{ request.user.username }}</p>
+                    <p class="text-xs text-green-400">ELO: {{ request.user.profile.rating }}</p>
+                </div>
+                <button class="bg-gray-800 p-2 rounded-full border border-gray-700">👤</button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container mx-auto py-8 px-4 grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+<div class="flex justify-between items-end mb-4">
+    <h2 class="text-3xl font-bold text-white">Lobby</h2>
+    <div class="flex gap-4 items-center">
+        {% if not user_ethereum_address %}
+        <a href="{% url 'set_ethereum_address' %}" class="bg-yellow-600 hover:bg-yellow-500 text-white px-4 py-2 rounded-lg text-sm font-bold">
+            ⚠️ Set Wallet Address
+        </a>
+        {% endif %}
+        <a href="{% url 'create_game' %}" class="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl font-bold">
+            + Create New Challenge
+        </a>
+    </div>
+</div>
+
+<div class="bg-gray-800 rounded-2xl overflow-hidden border border-gray-700">
+    <ul id="game-list" 
+        hx-get="{% url 'lobby_list_partial' %}" 
+        hx-trigger="every 5s" 
+        hx-swap="innerHTML">
+        {% include "main/partials/game_list.html" %}
+    </ul>
+</div>
+
+        <div class="space-y-6">
+            <div class="bg-gray-800 rounded-2xl border border-gray-700 shadow-xl">
+                <div class="p-4 border-b border-gray-700">
+                    <h3 class="font-bold flex items-center gap-2">
+                        <span class="text-yellow-500">🏆</span> Global Leaderboard
+                    </h3>
+                </div>
+                <div class="p-0">
+                    <table class="w-full text-left border-collapse">
+                        <thead class="text-xs uppercase text-gray-500 bg-gray-900/50">
+                            <tr>
+                                <th class="p-4">Rank</th>
+                                <th class="p-4">Player</th>
+                                <th class="p-4 text-right">Rating</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-700">
+                            {% for profile in leaderboard %}
+                            <tr class="hover:bg-gray-700/30 transition {% if profile.user == request.user %}bg-blue-900/20{% endif %}">
+                                <td class="p-4 text-gray-400 font-mono">#{{ forloop.counter }}</td>
+                                <td class="p-4 font-bold">{{ profile.user.username }}</td>
+                                <td class="p-4 text-right text-blue-400">{{ profile.rating }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </main>
+</body>
+</html>

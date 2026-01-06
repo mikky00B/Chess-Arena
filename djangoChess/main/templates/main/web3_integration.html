@@ -1,0 +1,365 @@
+<!-- Web3 Integration Script for Anvil Testing -->
+<script src="https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js"></script>
+<script>
+// Web3 Integration for Chess dApp (Anvil Testing)
+const ChessWeb3 = {
+    web3: null,
+    contract: null,
+    contractAddress: '{{ CHESS_CONTRACT_ADDRESS }}',
+    rpcUrl: '{{ BLOCKCHAIN_RPC_URL }}',
+    gameId: {{ game.id }},
+    betAmount: '{{ game.bet_amount }}',
+    userAddress: '{{ user_ethereum_address }}',
+    
+    // Initialize Web3 connection to Anvil
+    async init() {
+        console.log('=== INITIALIZING WEB3 ===');
+        console.log('RPC URL:', this.rpcUrl);
+        console.log('Contract Address:', this.contractAddress);
+        console.log('Game ID:', this.gameId);
+        console.log('Bet Amount:', this.betAmount);
+        console.log('User Address:', this.userAddress);
+        
+        try {
+            // Connect to Anvil RPC
+            this.web3 = new Web3(new Web3.providers.HttpProvider(this.rpcUrl));
+            console.log('Web3 instance created');
+            
+            // Test connection
+            const connected = await this.web3.eth.net.isListening();
+            console.log('Network listening:', connected);
+            
+            if (!connected) {
+                console.error('Cannot connect to Anvil');
+                this.updateStatus('❌ Cannot connect to blockchain', 'error');
+                return false;
+            }
+            
+            // Check chain ID
+            const chainId = await this.web3.eth.getChainId();
+            console.log('Chain ID:', chainId);
+            
+            // Load contract
+            await this.loadContract();
+            console.log('Contract loaded:', this.contract !== null);
+            
+            this.updateStatus('✅ Connected to Anvil (Chain ID: ' + chainId + ')', 'success');
+            return true;
+        } catch (error) {
+            console.error('Init error:', error);
+            console.error('Error stack:', error.stack);
+            this.updateStatus('❌ Connection failed: ' + error.message, 'error');
+            return false;
+        }
+    },
+    
+    // Load contract ABI and create instance
+    async loadContract() {
+        try {
+            // Fetch ABI from Django backend
+            const response = await fetch('/api/contract-abi/');
+            const data = await response.json();
+            
+            if (!data.success) {
+                throw new Error('Could not load contract ABI');
+            }
+            
+            const abi = data.abi;
+            console.log('Loaded ABI:', abi);
+            
+            this.contract = new this.web3.eth.Contract(abi, this.contractAddress);
+            console.log('Contract instance created:', this.contract);
+            
+        } catch (error) {
+            console.error('Error loading contract:', error);
+            
+            // Fallback: Use minimal ABI with correct Vyper format
+            const abi = [
+                {
+                    "type": "function",
+                    "name": "deposit",
+                    "stateMutability": "payable",
+                    "inputs": [{"name": "game_id", "type": "uint256"}],
+                    "outputs": []
+                },
+                {
+                    "type": "function",
+                    "name": "claim_winnings",
+                    "stateMutability": "nonpayable",
+                    "inputs": [
+                        {"name": "game_id", "type": "uint256"},
+                        {"name": "winner", "type": "address"},
+                        {"name": "v", "type": "uint256"},
+                        {"name": "r", "type": "bytes32"},
+                        {"name": "s", "type": "bytes32"}
+                    ],
+                    "outputs": []
+                },
+                {
+                    "type": "function",
+                    "name": "get_challenge",
+                    "stateMutability": "view",
+                    "inputs": [{"name": "game_id", "type": "uint256"}],
+                    "outputs": [
+                        {"name": "player_white", "type": "address"},
+                        {"name": "player_black", "type": "address"},
+                        {"name": "bet_amount", "type": "uint256"},
+                        {"name": "is_active", "type": "bool"},
+                        {"name": "is_completed", "type": "bool"}
+                    ]
+                }
+            ];
+            
+            console.log('Using fallback ABI');
+            this.contract = new this.web3.eth.Contract(abi, this.contractAddress);
+        }
+    },
+    
+    // Deposit ETH to contract
+    async deposit() {
+        console.log('=== DEPOSIT CALLED ===');
+        console.log('Contract:', this.contract);
+        console.log('Bet amount:', this.betAmount);
+        
+        if (parseFloat(this.betAmount) === 0) {
+            alert('This is a free game, no deposit needed!');
+            return;
+        }
+        
+        if (!this.contract) {
+            this.updateStatus('❌ Contract not loaded. Retrying...', 'error');
+            await this.loadContract();
+            if (!this.contract) {
+                this.updateStatus('❌ Failed to load contract', 'error');
+                return;
+            }
+        }
+        
+        this.updateStatus('🔄 Preparing deposit...', 'info');
+        
+        try {
+            // Convert ETH to Wei
+            const betWei = this.web3.utils.toWei(this.betAmount, 'ether');
+            console.log('Bet in Wei:', betWei);
+            
+            // Get user's account (from Anvil)
+            const accounts = await this.web3.eth.getAccounts();
+            console.log('Available accounts:', accounts);
+            
+            const userAccount = this.userAddress || accounts[0];
+            console.log('Using account:', userAccount);
+            
+            // Check balance
+            const balance = await this.web3.eth.getBalance(userAccount);
+            console.log('Account balance:', this.web3.utils.fromWei(balance, 'ether'), 'ETH');
+            
+            if (BigInt(balance) < BigInt(betWei)) {
+                this.updateStatus('❌ Insufficient balance', 'error');
+                alert(`Insufficient balance. You have ${this.web3.utils.fromWei(balance, 'ether')} ETH but need ${this.betAmount} ETH`);
+                return;
+            }
+            
+            this.updateStatus('🔄 Sending deposit transaction...', 'info');
+            
+            console.log('Calling contract.methods.deposit with game_id:', this.gameId);
+            
+            // Send deposit transaction
+            const tx = await this.contract.methods.deposit(this.gameId).send({
+                from: userAccount,
+                value: betWei,
+                gas: 300000
+            });
+            
+            console.log('Transaction successful:', tx);
+            
+            this.updateStatus('✅ Deposit confirmed!', 'success');
+            console.log('Deposit tx:', tx.transactionHash);
+            
+            // Save transaction hash to backend
+            await this.saveDepositTx(tx.transactionHash);
+            
+            // Refresh deposit status
+            await this.checkDepositStatus();
+            
+        } catch (error) {
+            console.error('Deposit error:', error);
+            console.error('Error stack:', error.stack);
+            this.updateStatus('❌ Deposit failed: ' + error.message, 'error');
+        }
+    },
+    
+    // Check current deposit status
+    async checkDepositStatus() {
+        this.updateStatus('🔄 Checking deposit status...', 'info');
+        
+        try {
+            const challenge = await this.contract.methods.get_challenge(this.gameId).call();
+            
+            const betWei = this.web3.utils.toWei(this.betAmount, 'ether');
+            const hasWhiteDeposit = challenge.player_white !== '0x0000000000000000000000000000000000000000';
+            const hasBlackDeposit = challenge.player_black !== '0x0000000000000000000000000000000000000000';
+            const isActive = challenge.is_active;
+            
+            let status = '📊 Deposit Status:\n';
+            status += `White Player: ${hasWhiteDeposit ? '✅ Deposited' : '⏳ Pending'}\n`;
+            status += `Black Player: ${hasBlackDeposit ? '✅ Deposited' : '⏳ Pending'}\n`;
+            status += `Game Active: ${isActive ? '✅ Ready to Play' : '⏳ Waiting for deposits'}`;
+            
+            this.updateStatus(status, isActive ? 'success' : 'info');
+            
+            return {
+                whiteDeposited: hasWhiteDeposit,
+                blackDeposited: hasBlackDeposit,
+                gameActive: isActive
+            };
+            
+        } catch (error) {
+            console.error('Status check error:', error);
+            this.updateStatus('❌ Could not check status: ' + error.message, 'error');
+            return null;
+        }
+    },
+    
+    // Claim winnings after game ends
+    async claimWinnings() {
+        this.updateStatus('🔄 Fetching signature...', 'info');
+        
+        try {
+            // Get signature from Django backend
+            const response = await fetch(`/chess/api/get-signature/{{ game.id }}/`, {
+                credentials: 'same-origin',  // Include cookies for authentication
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'  // Mark as AJAX request
+                }
+            });
+            
+            // Check if response is JSON
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                throw new Error('Server returned non-JSON response. Are you logged in?');
+            }
+            
+            const data = await response.json();
+            
+            if (!data.success) {
+                this.updateStatus('❌ ' + data.message, 'error');
+                alert(data.message);
+                return;
+            }
+            
+            const { signature, winner_address, is_draw } = data;
+            
+            if (is_draw) {
+                alert('Game was a draw. Use the "Claim Refund" button instead.');
+                return;
+            }
+            
+            this.updateStatus('🔄 Claiming winnings...', 'info');
+            
+            const accounts = await this.web3.eth.getAccounts();
+            const userAccount = this.userAddress || accounts[0];
+            
+            console.log('Claiming with params:', {
+                gameId: this.gameId,
+                winner: winner_address,
+                v: signature.v,
+                r: signature.r,
+                s: signature.s
+            });
+            
+            // Call claim_winnings on contract
+            const tx = await this.contract.methods.claim_winnings(
+                this.gameId,
+                this.web3.utils.toChecksumAddress(winner_address),
+                signature.v,
+                signature.r,
+                signature.s
+            ).send({
+                from: userAccount,
+                gas: 300000
+            });
+            
+            this.updateStatus('✅ Winnings claimed!', 'success');
+            console.log('Claim tx:', tx.transactionHash);
+            
+            // Save claim transaction
+            await this.saveClaimTx(tx.transactionHash);
+            
+            alert('🎉 Congratulations! You claimed ' + (parseFloat(this.betAmount) * 2) + ' ETH!');
+            
+        } catch (error) {
+            console.error('Claim error:', error);
+            this.updateStatus('❌ Claim failed: ' + error.message, 'error');
+        }
+    },
+    
+    // Save deposit transaction hash to backend
+    async saveDepositTx(txHash) {
+        try {
+            const response = await fetch(`/chess/api/verify-deposit/{{ game.id }}/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({ tx_hash: txHash })
+            });
+            
+            const data = await response.json();
+            console.log('Deposit saved:', data);
+        } catch (error) {
+            console.error('Error saving deposit:', error);
+        }
+    },
+    
+    // Save claim transaction hash to backend
+    async saveClaimTx(txHash) {
+        try {
+            const response = await fetch(`/chess/api/mark-payout/{{ game.id }}/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({ tx_hash: txHash })
+            });
+            
+            const data = await response.json();
+            console.log('Claim saved:', data);
+        } catch (error) {
+            console.error('Error saving claim:', error);
+        }
+    },
+    
+    // Update status display
+    updateStatus(message, type = 'info') {
+        const statusEl = document.getElementById('blockchain-status');
+        if (statusEl) {
+            statusEl.textContent = message;
+            statusEl.className = 'text-sm font-mono whitespace-pre-line ';
+            
+            if (type === 'error') {
+                statusEl.className += 'text-red-400';
+            } else if (type === 'success') {
+                statusEl.className += 'text-green-400';
+            } else {
+                statusEl.className += 'text-blue-400';
+            }
+        }
+        console.log(`[${type}]`, message);
+    }
+};
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', async () => {
+    await ChessWeb3.init();
+    
+    // Check deposit status on load
+    if (parseFloat(ChessWeb3.betAmount) > 0) {
+        await ChessWeb3.checkDepositStatus();
+    }
+});
+
+// Expose to global scope for button onclick
+window.ChessWeb3 = ChessWeb3;
+</script>

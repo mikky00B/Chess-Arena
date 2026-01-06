@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Create Game | Chess dApp</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen font-sans">
+
+    <nav class="border-b border-gray-800 p-4 bg-gray-900">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-black tracking-tighter text-blue-500">
+                <a href="{% url 'lobby' %}">CHESS<span class="text-white">DAPP</span></a>
+            </h1>
+            <div class="flex items-center gap-4">
+                <span class="text-sm">{{ request.user.username }}</span>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container mx-auto py-12 px-4 max-w-2xl">
+        <div class="bg-gray-800 rounded-2xl border border-gray-700 p-8 shadow-xl">
+            <h2 class="text-3xl font-bold mb-6">Create New Game</h2>
+            
+            {% if messages %}
+                {% for message in messages %}
+                <div class="mb-4 p-4 rounded-lg {% if message.tags == 'error' %}bg-red-900/20 border border-red-600 text-red-400{% else %}bg-blue-900/20 border border-blue-600 text-blue-400{% endif %}">
+                    {{ message }}
+                </div>
+                {% endfor %}
+            {% endif %}
+
+            <form method="POST" class="space-y-6">
+                {% csrf_token %}
+                
+                <div>
+                    <label class="block text-sm font-bold mb-2">Bet Amount (ETH)</label>
+                    <input 
+                        type="number" 
+                        name="bet_amount" 
+                        step="0.001"
+                        min="0"
+                        value="0"
+                        class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 focus:outline-none focus:border-blue-500"
+                        placeholder="0.00"
+                    >
+                    <p class="text-xs text-gray-400 mt-2">
+                        Set to 0 for a free game, or enter an amount to play for real ETH.
+                    </p>
+                </div>
+
+                <div class="bg-gray-900/50 rounded-lg p-4 text-sm space-y-2">
+                    <p class="text-yellow-400 font-bold">⚠️ Important:</p>
+                    <ul class="text-gray-400 space-y-1 ml-4">
+                        <li>• If you set a bet amount, you must deposit ETH to the smart contract</li>
+                        <li>• Your opponent must match your bet to start the game</li>
+                        <li>• Winner takes the entire pot (both deposits)</li>
+                        <li>• In case of a draw, both players get refunded</li>
+                    </ul>
+                </div>
+
+                <div class="flex gap-4">
+                    <button 
+                        type="submit" 
+                        class="flex-1 bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl font-bold transition-all"
+                    >
+                        Create Game
+                    </button>
+                    <a 
+                        href="{% url 'lobby' %}" 
+                        class="flex-1 bg-gray-700 hover:bg-gray-600 text-white px-6 py-3 rounded-xl font-bold text-center transition-all"
+                    >
+                        Cancel
+                    </a>
+                </div>
+            </form>
+        </div>
+    </main>
+</body>
+</html>

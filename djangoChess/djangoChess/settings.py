@@ -143,3 +143,23 @@ CHANNEL_LAYERS = {
 LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "lobby"
 LOGOUT_REDIRECT_URL = "login"
+
+
+"""
+Add these settings to your Django settings.py file
+"""
+
+# Blockchain Configuration
+BLOCKCHAIN_RPC_URL = (
+    "https://eth-sepolia.g.alchemy.com/v2/YOUR_API_KEY"  # Or your preferred RPC
+)
+CHESS_CONTRACT_ADDRESS = "0xYourContractAddress"  # Deploy contract and add address here
+JUDGE_PRIVATE_KEY = (
+    "your_private_key_here"  # KEEP THIS SECRET! Use environment variable in production
+)
+
+# Alternative using environment variables (RECOMMENDED for production):
+
+BLOCKCHAIN_RPC_URL = os.getenv("BLOCKCHAIN_RPC_URL", "http://localhost:8545")
+CHESS_CONTRACT_ADDRESS = os.getenv("CHESS_CONTRACT_ADDRESS", "")
+JUDGE_PRIVATE_KEY = os.getenv("JUDGE_PRIVATE_KEY", "")

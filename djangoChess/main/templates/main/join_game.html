@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Join Game | Chess dApp</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen font-sans">
+
+    <nav class="border-b border-gray-800 p-4 bg-gray-900">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-black tracking-tighter text-blue-500">
+                <a href="{% url 'lobby' %}">CHESS<span class="text-white">DAPP</span></a>
+            </h1>
+            <div class="flex items-center gap-4">
+                <span class="text-sm">{{ request.user.username }}</span>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container mx-auto py-12 px-4 max-w-2xl">
+        <div class="bg-gray-800 rounded-2xl border border-gray-700 p-8 shadow-xl">
+            <h2 class="text-3xl font-bold mb-6">Join Challenge</h2>
+            
+            {% if messages %}
+                {% for message in messages %}
+                <div class="mb-4 p-4 rounded-lg {% if message.tags == 'error' %}bg-red-900/20 border border-red-600 text-red-400{% else %}bg-blue-900/20 border border-blue-600 text-blue-400{% endif %}">
+                    {{ message }}
+                </div>
+                {% endfor %}
+            {% endif %}
+
+            <!-- Game Details -->
+            <div class="space-y-6 mb-8">
+                <div class="bg-gray-900/50 rounded-lg p-6">
+                    <h3 class="text-sm text-gray-400 mb-4">Game Details</h3>
+                    
+                    <div class="space-y-4">
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-300">Opponent</span>
+                            <span class="font-bold text-lg">{{ opponent.username }}</span>
+                        </div>
+                        
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-300">Opponent Rating</span>
+                            <span class="font-bold text-green-400">{{ opponent_rating }}</span>
+                        </div>
+                        
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-300">Your Rating</span>
+                            <span class="font-bold text-green-400">{{ request.user.profile.rating }}</span>
+                        </div>
+                        
+                        <div class="border-t border-gray-700 pt-4"></div>
+                        
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-300">Bet Amount</span>
+                            {% if bet_amount > 0 %}
+                                <span class="font-bold text-2xl text-yellow-400">💰 {{ bet_amount }} ETH</span>
+                            {% else %}
+                                <span class="font-bold text-xl text-green-400">🆓 Free Game</span>
+                            {% endif %}
+                        </div>
+                        
+                        {% if bet_amount > 0 %}
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-300">Winner Takes</span>
+                            <span class="font-bold text-xl text-blue-400">{{ bet_amount|floatformat:3|add:bet_amount|floatformat:3 }} ETH</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                {% if bet_amount > 0 %}
+                <!-- Deposit Warning -->
+                <div class="bg-yellow-900/20 border border-yellow-600 rounded-lg p-6">
+                    <h3 class="text-yellow-400 font-bold mb-3 flex items-center gap-2">
+                        ⚠️ Important: Deposit Required
+                    </h3>
+                    <div class="text-sm text-gray-300 space-y-2">
+                        <p>To join this game, you must:</p>
+                        <ul class="ml-4 space-y-1">
+                            <li>✓ Deposit exactly <strong class="text-yellow-400">{{ bet_amount }} ETH</strong> to the smart contract</li>
+                            <li>✓ Your opponent must also deposit the same amount</li>
+                            <li>✓ Both deposits are held in escrow until game ends</li>
+                            <li>✓ Winner takes the entire pot ({{ bet_amount|floatformat:3|add:bet_amount|floatformat:3 }} ETH)</li>
+                            <li>✓ Draw = both players get refunded</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Your Wallet Info -->
+                <div class="bg-gray-900/50 rounded-lg p-4">
+                    <h3 class="text-xs text-gray-400 mb-2">Your Ethereum Address</h3>
+                    <p class="font-mono text-sm text-blue-400 break-all">{{ request.user.profile.ethereum_address }}</p>
+                    <p class="text-xs text-gray-500 mt-2">Make sure you have at least {{ bet_amount }} ETH + gas fees</p>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Action Buttons -->
+            <form method="POST" class="space-y-4">
+                {% csrf_token %}
+                
+                {% if bet_amount > 0 %}
+                <div class="bg-blue-900/20 border border-blue-600 rounded-lg p-4 text-sm text-blue-300">
+                    <p class="font-bold mb-2">Next Steps:</p>
+                    <ol class="ml-4 space-y-1">
+                        <li>1. Click "Join Game" below</li>
+                        <li>2. You'll be taken to the game board</li>
+                        <li>3. Use the deposit button to send {{ bet_amount }} ETH to the contract</li>
+                        <li>4. Wait for opponent to deposit</li>
+                        <li>5. Game starts when both deposits are confirmed</li>
+                    </ol>
+                </div>
+                {% endif %}
+
+                <div class="flex gap-4">
+                    <button 
+                        type="submit" 
+                        class="flex-1 bg-blue-600 hover:bg-blue-500 text-white px-6 py-4 rounded-xl font-bold text-lg transition-all"
+                    >
+                        {% if bet_amount > 0 %}
+                            Join Game & Prepare Deposit
+                        {% else %}
+                            Join Game
+                        {% endif %}
+                    </button>
+                    <a 
+                        href="{% url 'lobby' %}" 
+                        class="flex-1 bg-gray-700 hover:bg-gray-600 text-white px-6 py-4 rounded-xl font-bold text-lg text-center transition-all"
+                    >
+                        Cancel
+                    </a>
+                </div>
+            </form>
+        </div>
+    </main>
+</body>
+</html>

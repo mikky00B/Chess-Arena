@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Set Ethereum Address | Chess dApp</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen font-sans">
+
+    <nav class="border-b border-gray-800 p-4 bg-gray-900">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-black tracking-tighter text-blue-500">
+                <a href="{% url 'lobby' %}">CHESS<span class="text-white">DAPP</span></a>
+            </h1>
+            <div class="flex items-center gap-4">
+                <span class="text-sm">{{ request.user.username }}</span>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container mx-auto py-12 px-4 max-w-2xl">
+        <div class="bg-gray-800 rounded-2xl border border-gray-700 p-8 shadow-xl">
+            <h2 class="text-3xl font-bold mb-6">Set Ethereum Address</h2>
+            
+            {% if messages %}
+                {% for message in messages %}
+                <div class="mb-4 p-4 rounded-lg {% if message.tags == 'error' %}bg-red-900/20 border border-red-600 text-red-400{% else %}bg-green-900/20 border border-green-600 text-green-400{% endif %}">
+                    {{ message }}
+                </div>
+                {% endfor %}
+            {% endif %}
+
+            <form method="POST" class="space-y-6">
+                {% csrf_token %}
+                
+                <div>
+                    <label class="block text-sm font-bold mb-2">Ethereum Address</label>
+                    <input 
+                        type="text" 
+                        name="ethereum_address" 
+                        value="{{ current_address|default:'' }}"
+                        class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 focus:outline-none focus:border-blue-500 font-mono text-sm"
+                        placeholder="0x..."
+                        required
+                    >
+                    <p class="text-xs text-gray-400 mt-2">
+                        Enter your Ethereum wallet address. This will be used for receiving winnings.
+                    </p>
+                </div>
+
+                <div class="bg-yellow-900/20 border border-yellow-600 rounded-lg p-4 text-sm">
+                    <p class="text-yellow-400 font-bold mb-2">⚠️ Important:</p>
+                    <ul class="text-gray-400 space-y-1 ml-4">
+                        <li>• Make sure you control this address (have the private key)</li>
+                        <li>• For testing, use an Anvil test account address</li>
+                        <li>• This address will receive your winnings from the smart contract</li>
+                        <li>• You can change this address later</li>
+                    </ul>
+                </div>
+
+                {% if current_address %}
+                <div class="bg-gray-900/50 rounded-lg p-4 text-sm">
+                    <p class="text-gray-400">Current address: <span class="text-blue-400 font-mono">{{ current_address }}</span></p>
+                </div>
+                {% endif %}
+
+                <div class="flex gap-4">
+                    <button 
+                        type="submit" 
+                        class="flex-1 bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl font-bold transition-all"
+                    >
+                        {% if current_address %}Update{% else %}Set{% endif %} Address
+                    </button>
+                    <a 
+                        href="{% url 'lobby' %}" 
+                        class="flex-1 bg-gray-700 hover:bg-gray-600 text-white px-6 py-3 rounded-xl font-bold text-center transition-all"
+                    >
+                        {% if current_address %}Cancel{% else %}Skip for Now{% endif %}
+                    </a>
+                </div>
+            </form>
+        </div>
+    </main>
+</body>
+</html>

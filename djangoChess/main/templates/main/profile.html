@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Profile | Chess dApp</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen font-sans">
+
+    <nav class="border-b border-gray-800 p-4 bg-gray-900">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-black tracking-tighter text-blue-500">
+                <a href="{% url 'lobby' %}">CHESS<span class="text-white">DAPP</span></a>
+            </h1>
+            <div class="flex items-center gap-4">
+                <a href="{% url 'lobby' %}" class="text-sm hover:text-blue-400">← Back to Lobby</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container mx-auto py-12 px-4 max-w-4xl">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Profile Info -->
+            <div class="bg-gray-800 rounded-2xl border border-gray-700 p-6 shadow-xl">
+                <h2 class="text-2xl font-bold mb-6">Profile</h2>
+                <div class="space-y-4">
+                    <div>
+                        <p class="text-sm text-gray-400">Username</p>
+                        <p class="text-xl font-bold">{{ request.user.username }}</p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-400">Rating</p>
+                        <p class="text-2xl font-bold text-green-400">{{ profile.rating }}</p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-400">Ethereum Address</p>
+                        {% if profile.ethereum_address %}
+                        <p class="text-sm font-mono text-blue-400 break-all">{{ profile.ethereum_address }}</p>
+                        <a href="{% url 'set_ethereum_address' %}" class="text-xs text-gray-400 hover:text-blue-400">Change address</a>
+                        {% else %}
+                        <p class="text-sm text-red-400">Not set</p>
+                        <a href="{% url 'set_ethereum_address' %}" class="text-xs text-blue-400 hover:text-blue-300">Set address now →</a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stats -->
+            <div class="bg-gray-800 rounded-2xl border border-gray-700 p-6 shadow-xl">
+                <h2 class="text-2xl font-bold mb-6">Statistics</h2>
+                <div class="space-y-4">
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-400">Games Played</span>
+                        <span class="text-2xl font-bold">{{ games_played }}</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-400">Games Won</span>
+                        <span class="text-2xl font-bold text-green-400">{{ games_won }}</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-400">Win Rate</span>
+                        <span class="text-2xl font-bold text-blue-400">
+                            {% if games_played > 0 %}
+                                {{ games_won|floatformat:0 }}%
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+</body>
+</html>
