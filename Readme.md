@@ -33,48 +33,36 @@ A full-stack decentralized chess platform where players can challenge each other
 - **EIP-191 compliant signatures** for security
 - **Judge oracle pattern** for off-chain computation verification
 
-## 🔒 Security Features
-
-### Fixed Vulnerabilities
-
-1. **Server-Side Time Management**
-   - All time calculations happen on the server
-   - Client only displays server-provided times
-   - Prevents client-side manipulation
-
-2. **EIP-191 Compliant Signatures**
-   - Proper Ethereum signed message format
-   - Protection against signature malleability
-   - Replay attack prevention with nonce tracking
-
-3. **Draw Handling**
-   - Dedicated smart contract function for draws
-   - Automatic refunds to both players
-   - Judge-signed draw verification
-
-4. **Timeout Protection**
-   - Players can claim abandoned games after 24 hours
-   - Prevents fund lockup from disconnected opponents
-   - Automatic forfeit on timer expiration
 
 ## 📁 Project Structure
 
 ```
-chess-dapp/
-├── models.py              # Database models (Game, Profile, Move)
-├── views.py               # Django views
-├── consumers.py           # WebSocket consumer (FIXED: server-side time)
-├── chess_logic.py         # Chess move validation
-├── blockchain_views.py    # API endpoints for blockchain interaction (NEW)
-├── blockchain_utils.py    # Web3 utilities and signature generation (NEW)
-├── signals.py             # ELO updates and signature generation (FIXED)
-├── chessgame.vy          # Smart contract (FIXED: EIP-191, draws, timeout)
-├── routing.py            # WebSocket URL routing
-├── templates/
-│   └── main/
-│       ├── lobby.html    # Game lobby
-│       └── board2.html   # Game interface (FIXED: timer sync)
-└── requirements.txt      # Python dependencies
+Chesschallenge/
+├── djangoChess/                 # Off-chain: Real-time Game Engine (Django)
+│   ├── main/
+│   │   ├── models.py            # Database models (Game, Move, Profile)
+│   │   ├── views.py             # HTTP view logic
+│   │   ├── consumers.py         # WebSocket logic (Real-time moves & chat)
+│   │   ├── chess_logic.py       # Python-chess move validation
+│   │   ├── blockchain_utils.py  # EIP-191 Signature generation (The "Judge")
+│   │   ├── blockchain_views.py  # Endpoints for contract interaction
+│   │   ├── signals.py           # Post-game logic (ELO & cleanup)
+│   │   ├── templates/           # Alpine.js & Tailwind UI
+│   │   │   └── main/
+│   │   │       ├── lobby.html   # Matchmaking area
+│   │   │       └── board2.html  # Live game interface (Synced timers)
+│   │   └── routing.py           # WebSocket URL routing
+│   ├── manage.py                # Django CLI
+│   └── requirements.txt         # Backend dependencies
+│
+├── chess_blockchain/            # On-chain: Financial Settlement (Vyper)
+│   ├── src/
+│   │   └── chessgame.vy         # Smart Contract (Escrow, Draws, Payouts)
+│   ├── script/                  # Deployment & interaction scripts
+│   ├── moccasin.toml            # Vyper/Moccasin configuration
+│   └── tests/                   # Smart contract unit tests
+│
+└── .gitignore                   # Consolidated global ignore rules
 ```
 
 ## 🚀 Getting Started
