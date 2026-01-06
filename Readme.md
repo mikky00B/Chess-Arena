@@ -70,8 +70,8 @@ Chesschallenge/
 ### 1. Clone and Install
 
 ```bash
-git clone <your-repo>
-cd chess-dapp
+git clone <https://github.com/yourusername/chess-Arena>
+cd chess-Arena
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
@@ -158,18 +158,9 @@ pytest --cov=main --cov-report=html
    - Recommendation: Keep stakes low ($1-5) to discourage cheating
    - Future: Implement statistical move analysis
 
-2. **Gas Costs**: Winner pays gas to claim (typically $2-10 on mainnet)
-   - Recommendation: Use L2 solutions (Arbitrum, Optimism) for lower fees
-
-3. **Centralization**: Judge server must sign all payouts
+2. **Centralization**: Judge server must sign all payouts
    - Trade-off: Allows off-chain chess computation while maintaining security
 
-## 📊 Gas Estimates (Sepolia)
-
-- Deploy Contract: ~1,500,000 gas
-- Deposit: ~80,000 gas
-- Claim Winnings: ~60,000 gas
-- Settle Draw: ~100,000 gas
 
 ## 🛠️ Tech Stack
 
