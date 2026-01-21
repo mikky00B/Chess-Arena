@@ -71,18 +71,19 @@ Chesschallenge/
 
 ```bash
 git clone <https://github.com/yourusername/chess-Arena>
-cd chess-Arena
-python -m venv venv
-source venv/bin/activate
+# 1. Setup Django Backend
+cd djangoChess
+python -m venv .venv
+source .venv/bin/activate  
 pip install -r requirements.txt
+
+# 2. Setup Blockchain Environment (Moccasin)
+cd ../chess_blockchain
+# Moccasin uses uv or pip
+pip install moccasin vyper
+moccasin install
 ```
 
-### 2. Setup Environment
-
-```bash
-cp .env.example .env
-# Edit .env with your configuration
-```
 
 ### 3. Deploy Smart Contract
 

@@ -52,13 +52,69 @@ class ChessConsumer(AsyncWebsocketConsumer):
                 if self.user == game_obj.white_player
                 else game_obj.white_player
             )
-            await self.end_game_db(game_obj, "Resignation", winner)
+            await self.end_game_db(game_obj, "resignation", winner)
             await self.channel_layer.group_send(
                 self.room_group_name,
                 {
                     "type": "game_over_broadcast",
-                    "outcome": f"{self.user.username} resigned.",
+                    "outcome": "resignation",
                     "winner": winner.username if winner else "Unknown",
+                },
+            )
+
+        elif message_type == "offer_draw":
+            # Offer draw
+            if not game_obj.is_active or not game_obj.black_player:
+                await self.send(text_data=json.dumps({"error": "Cannot offer draw"}))
+                return
+
+            # Save draw offer
+            await self.set_draw_offer(game_obj, self.user)
+
+            # Notify both players
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {
+                    "type": "draw_offer_broadcast",
+                    "player": self.user.username,
+                },
+            )
+
+        elif message_type == "accept_draw":
+            # Accept draw offer
+            if not game_obj.is_active or not game_obj.draw_offered_by:
+                await self.send(
+                    text_data=json.dumps({"error": "No draw offer to accept"})
+                )
+                return
+
+            # Make sure the person accepting isn't the one who offered
+            if self.user == game_obj.draw_offered_by:
+                await self.send(
+                    text_data=json.dumps({"error": "Cannot accept your own offer"})
+                )
+                return
+
+            # End game as draw (winner=None means draw)
+            await self.end_game_db(game_obj, "draw by agreement", None)
+
+            # Notify both players
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {
+                    "type": "game_over_broadcast",
+                    "outcome": "draw by agreement",
+                    "winner": None,
+                },
+            )
+
+        elif message_type == "decline_draw":
+            # Decline draw offer
+            await self.set_draw_offer(game_obj, None)
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {
+                    "type": "draw_declined_broadcast",
                 },
             )
 
@@ -133,21 +189,39 @@ class ChessConsumer(AsyncWebsocketConsumer):
         payload["type"] = "move"
         await self.send(text_data=json.dumps(payload))
 
+    async def draw_offer_broadcast(self, event):
+        await self.send(
+            text_data=json.dumps({"type": "draw_offer", "player": event["player"]})
+        )
+
+    async def draw_declined_broadcast(self, event):
+        await self.send(text_data=json.dumps({"type": "draw_declined"}))
+
     @database_sync_to_async
     def get_game(self):
-        return Game.objects.select_related("white_player", "black_player").get(
-            id=self.game_id
-        )
+        return Game.objects.select_related(
+            "white_player", "black_player", "draw_offered_by"
+        ).get(id=self.game_id)
 
     @database_sync_to_async
     def end_game_db(self, game_obj, outcome, winner):
         game_obj.is_active = False
         game_obj.winner = winner
+        game_obj.draw_offered_by = None  # Clear any draw offers
+        game_obj.save()
+
+    @database_sync_to_async
+    def set_draw_offer(self, game_obj, user):
+        game_obj.draw_offered_by = user
         game_obj.save()
 
     @database_sync_to_async
     def update_game_data(self, game_obj, move_san, new_fen, outcome, current_player):
         now = timezone.now()
+
+        # Start timer on first move (when both players have joined)
+        if game_obj.black_player and not game_obj.last_move_timestamp:
+            game_obj.last_move_timestamp = now
 
         # SERVER-SIDE TIME CALCULATION (CRITICAL FIX)
         if game_obj.last_move_timestamp:
@@ -173,6 +247,10 @@ class ChessConsumer(AsyncWebsocketConsumer):
         # Update game state
         game_obj.current_fen = new_fen
         game_obj.last_move_timestamp = now
+
+        # Clear any pending draw offers after a move
+        if game_obj.draw_offered_by:
+            game_obj.draw_offered_by = None
 
         # Handle game outcome
         if outcome and outcome != "timeout":

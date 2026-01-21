@@ -60,6 +60,21 @@ class Game(models.Model):
     # Payout status
     payout_claimed = models.BooleanField(default=False)
 
+    # Draw offers
+    draw_offered_by = models.ForeignKey(
+        User,
+        related_name="draw_offers",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+
+    # Game visibility
+    is_private = models.BooleanField(default=False)
+    private_link_code = models.CharField(
+        max_length=32, blank=True, null=True, unique=True
+    )
+
     def __str__(self):
         return f"Game {self.id}: {self.white_player} vs {self.black_player}"
 
@@ -67,6 +82,7 @@ class Game(models.Model):
         indexes = [
             models.Index(fields=["is_active", "black_player"]),
             models.Index(fields=["created_at"]),
+            models.Index(fields=["private_link_code"]),
         ]
 
 

@@ -9,7 +9,19 @@ from django.utils import timezone
 from django.contrib import messages
 
 
-def signin(request):
+def signup(request):
+    if request.method == "POST":
+        form = UserCreationForm(request.POST)
+        if form.is_valid():
+            user = form.save()
+            login(request, user)
+            return redirect("lobby")
+    else:
+        form = UserCreationForm()
+    return render(request, "main/signup.html", {"form": form})
+
+
+def login_view(request):
     if request.method == "POST":
         username = request.POST.get("username")
         password = request.POST.get("password")
@@ -23,18 +35,6 @@ def signin(request):
             messages.error(request, "Invalid username or password")
 
     return render(request, "main/login.html")
-
-
-def signup(request):
-    if request.method == "POST":
-        form = UserCreationForm(request.POST)
-        if form.is_valid():
-            user = form.save()
-            login(request, user)
-            return redirect("lobby")
-    else:
-        form = UserCreationForm()
-    return render(request, "main/signup.html", {"form": form})
 
 
 @login_required
@@ -59,9 +59,13 @@ def game_detail(request, game_id):
 
 @login_required
 def lobby(request):
-    open_games = Game.objects.filter(black_player__isnull=True, is_active=True).exclude(
-        white_player=request.user
-    )
+    # Only show public games in lobby
+    open_games = Game.objects.filter(
+        black_player__isnull=True,
+        is_active=True,
+        is_private=False,  # NEW: Only public games
+    ).exclude(white_player=request.user)
+
     my_games = (
         Game.objects.filter(is_active=True)
         .filter(Q(white_player=request.user) | Q(black_player=request.user))
@@ -88,7 +92,7 @@ def lobby_list_partial(request):
 
 @login_required
 def create_game(request):
-    """Create a new game with optional bet amount"""
+    """Create a new game with optional bet amount and privacy"""
 
     # Check if user has Ethereum address set
     if not request.user.profile.ethereum_address:
@@ -107,23 +111,46 @@ def create_game(request):
 
     if request.method == "POST":
         bet_amount = request.POST.get("bet_amount", "0")
+        is_private = request.POST.get("is_private") == "on"
 
         try:
             bet_amount = float(bet_amount)
             if bet_amount < 0:
                 messages.error(request, "Bet amount cannot be negative.")
-                return redirect("lobby")
+                return redirect("create_game")
         except ValueError:
             bet_amount = 0
 
+        # Generate private link code if private
+        private_link_code = None
+        if is_private:
+            import secrets
+
+            private_link_code = secrets.token_urlsafe(16)
+
         # Create game with bet amount
-        new_game = Game.objects.create(white_player=request.user, bet_amount=bet_amount)
+        new_game = Game.objects.create(
+            white_player=request.user,
+            bet_amount=bet_amount,
+            is_private=is_private,
+            private_link_code=private_link_code,
+        )
 
         if bet_amount > 0:
             messages.info(
                 request,
                 f"Game created with {bet_amount} ETH bet. "
                 "You and your opponent must deposit to the smart contract before playing.",
+            )
+
+        if is_private:
+            # Show private link
+            private_url = request.build_absolute_uri(
+                f"/join-private/{private_link_code}/"
+            )
+            messages.success(
+                request,
+                f"Private game created! Share this link with your opponent: {private_url}",
             )
 
         return redirect("game_detail", game_id=new_game.id)
@@ -225,6 +252,28 @@ def set_ethereum_address(request):
         "main/set_address.html",
         {"current_address": request.user.profile.ethereum_address},
     )
+
+
+@login_required
+def join_private_game(request, link_code):
+    """Join a private game using the link code"""
+    try:
+        game = Game.objects.get(private_link_code=link_code, is_private=True)
+    except Game.DoesNotExist:
+        messages.error(request, "Invalid or expired game link.")
+        return redirect("lobby")
+
+    # Check if game is still available
+    if game.black_player is not None:
+        messages.error(request, "This game is already full.")
+        return redirect("lobby")
+
+    if game.white_player == request.user:
+        # Creator accessing their own game
+        return redirect("game_detail", game_id=game.id)
+
+    # Redirect to normal join flow
+    return redirect("join_game", game_id=game.id)
 
 
 @login_required

@@ -12,13 +12,96 @@
         .timer-active { @apply border-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.4)] bg-blue-900/20; }
         #myBoard { @apply rounded-xl overflow-hidden border-4 border-gray-800 shadow-2xl; }
         .piece-417db { max-width: none !important; }
+        
+        @keyframes slideDown {
+            from { transform: translateY(-100%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .notification {
+            animation: slideDown 0.3s ease-out;
+        }
+        
+        @keyframes confetti {
+            0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+            100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+        }
+        .confetti { animation: confetti 3s ease-out forwards; }
     </style>
 </head>
 <body class="bg-gray-900 text-gray-100 min-h-screen font-sans" x-data="chessGame()" x-init="initBoard()">
 
+    <!-- Game End Modal -->
+    <div x-show="gameEndModal.show" class="modal-overlay fixed inset-0 bg-black/90 flex items-center justify-center z-50" x-cloak>
+        <div class="bg-gray-800 p-8 rounded-3xl text-center border border-gray-700 shadow-2xl max-w-md mx-4">
+            <h2 class="text-4xl font-bold mb-4" x-text="gameEndModal.title"></h2>
+            <p class="text-xl text-gray-300 mb-6" x-text="gameEndModal.message"></p>
+            
+            <template x-if="gameEndModal.isWinner">
+                <div class="space-y-4">
+                    <p class="text-2xl font-bold text-green-400">🎉 Congratulations!</p>
+                    <template x-if="betAmount > 0">
+                        <p class="text-lg">You can now claim <span class="text-yellow-400 font-bold" x-text="(betAmount * 2).toFixed(3)"></span> ETH!</p>
+                    </template>
+                </div>
+            </template>
+            
+            <template x-if="gameEndModal.isDraw && betAmount > 0">
+                <div class="space-y-4">
+                    <p class="text-lg text-blue-400">Both players will receive their <span class="font-bold" x-text="betAmount"></span> ETH refund.</p>
+                </div>
+            </template>
+            
+            <template x-if="!gameEndModal.isWinner && !gameEndModal.isDraw">
+                <div class="space-y-4 mt-6">
+                    <p class="text-gray-400">What would you like to do?</p>
+                    <div class="flex flex-col gap-3">
+                        <a href="{% url 'create_game' %}" class="bg-blue-600 hover:bg-blue-500 px-6 py-3 rounded-xl font-bold transition-all">
+                            🆕 Create New Game
+                        </a>
+                        <a href="{% url 'lobby' %}" class="bg-gray-700 hover:bg-gray-600 px-6 py-3 rounded-xl font-bold transition-all">
+                            🔍 Browse Public Games
+                        </a>
+                    </div>
+                </div>
+            </template>
+            
+            <button 
+                @click="gameEndModal.show = false" 
+                class="mt-6 bg-gray-600 hover:bg-gray-500 px-8 py-3 rounded-xl font-bold transition-all"
+            >
+                Close
+            </button>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div x-show="notification.show" 
+         class="notification fixed top-4 right-4 bg-gray-800 border-2 rounded-xl p-4 shadow-2xl z-40 max-w-sm"
+         :class="{
+             'border-green-500': notification.type === 'success',
+             'border-red-500': notification.type === 'error',
+             'border-blue-500': notification.type === 'info',
+             'border-yellow-500': notification.type === 'warning'
+         }"
+         x-cloak>
+        <div class="flex items-start gap-3">
+            <span class="text-2xl">
+                <template x-if="notification.type === 'success'">✅</template>
+                <template x-if="notification.type === 'error'">❌</template>
+                <template x-if="notification.type === 'info'">ℹ️</template>
+                <template x-if="notification.type === 'warning'">⚠️</template>
+            </span>
+            <div class="flex-1">
+                <p class="font-bold" x-text="notification.title"></p>
+                <p class="text-sm text-gray-300" x-text="notification.message"></p>
+            </div>
+            <button @click="notification.show = false" class="text-gray-400 hover:text-white">✕</button>
+        </div>
+    </div>
+
     <div class="container mx-auto py-8 px-4">
         
-        <!-- Deposit Status Banner (if game has bet) -->
+        <!-- Deposit Status Banner -->
         {% if game.bet_amount > 0 %}
         <div class="mb-6 bg-yellow-900/20 border border-yellow-600 rounded-xl p-4 max-w-[950px] mx-auto">
             <div class="flex items-start gap-3">
@@ -31,14 +114,10 @@
                         <p>🏆 Winner takes: {{ game.bet_amount|floatformat:3|add:game.bet_amount|floatformat:3 }} ETH</p>
                     </div>
                     
-                    <!-- Status Display -->
                     <div class="bg-gray-900/50 rounded p-3 mb-3">
-                        <p id="blockchain-status" class="text-sm font-mono text-gray-400">
-                            Connecting to blockchain...
-                        </p>
+                        <p id="blockchain-status" class="text-sm font-mono text-gray-400">Connecting to blockchain...</p>
                     </div>
                     
-                    <!-- Action Buttons -->
                     <div class="flex gap-3 flex-wrap">
                         <button 
                             onclick="ChessWeb3.deposit()" 
@@ -60,35 +139,84 @@
                             🎉 Claim Winnings
                         </button>
                         {% endif %}
+                        {% if not game.is_active and not game.winner %}
+                        <button 
+                            onclick="ChessWeb3.claimRefund()" 
+                            class="bg-purple-600 hover:bg-purple-500 px-4 py-2 rounded-lg text-sm font-bold transition-all"
+                        >
+                            💰 Claim Refund (Draw)
+                        </button>
+                        {% endif %}
                     </div>
                 </div>
             </div>
         </div>
         {% endif %}
         
+        <!-- Draw Offer Banner -->
+        <div x-show="drawOffer.active" x-cloak class="mb-6 bg-blue-900/20 border border-blue-600 rounded-xl p-4 max-w-[950px] mx-auto">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="font-bold text-blue-400">
+                        <span x-text="drawOffer.fromOpponent ? 'Your opponent' : 'You'"></span> offered a draw
+                    </p>
+                    <p class="text-sm text-gray-300" x-show="drawOffer.fromOpponent">Do you want to accept?</p>
+                    <p class="text-sm text-gray-300" x-show="!drawOffer.fromOpponent">Waiting for opponent's response...</p>
+                </div>
+                <div x-show="drawOffer.fromOpponent" class="flex gap-3">
+                    <button @click="acceptDraw()" class="bg-green-600 hover:bg-green-500 px-4 py-2 rounded-lg text-sm font-bold">
+                        ✓ Accept
+                    </button>
+                    <button @click="declineDraw()" class="bg-red-600 hover:bg-red-500 px-4 py-2 rounded-lg text-sm font-bold">
+                        ✕ Decline
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
             <div class="lg:col-span-7 flex flex-col items-center">
+                <!-- Opponent Timer -->
                 <div class="w-full max-w-[450px] mb-4 flex justify-between items-center bg-gray-800 p-4 rounded-xl border border-gray-700 transition-all"
                      :class="activeTurn === (isWhitePlayer ? 'black' : 'white') ? 'timer-active' : ''">
                     <p class="font-bold">Opponent: {% if game.white_player == request.user %}{{ game.black_player.username|default:"Waiting..." }}{% else %}{{ game.white_player.username }}{% endif %}</p>
                     <div class="text-3xl font-mono font-black" x-text="formatTime(isWhitePlayer ? blackTime : whiteTime)">00:00</div>
                 </div>
 
+                <!-- Chess Board -->
                 <div id="myBoard" class="mx-auto" style="width: 100%; max-width: 450px;"></div>
 
+                <!-- Player Timer -->
                 <div class="w-full max-w-[450px] mt-4 flex justify-between items-center bg-gray-800 p-4 rounded-xl border border-gray-700 transition-all"
                      :class="activeTurn === (isWhitePlayer ? 'white' : 'black') ? 'timer-active' : ''">
                     <p class="font-bold">You ({{ request.user.username }})</p>
                     <div class="text-3xl font-mono font-black" x-text="formatTime(isWhitePlayer ? whiteTime : blackTime)">00:00</div>
                 </div>
 
-                <div class="mt-6 flex items-center gap-4 w-full max-w-[450px]">
+                <!-- Game Controls -->
+                <div class="mt-6 flex items-center gap-3 w-full max-w-[450px] flex-wrap">
                     <div class="flex-1 px-4 py-2 bg-gray-800 rounded-lg text-xs font-bold border border-gray-700" x-text="statusMsg">Connecting...</div>
-                    <button @click="resign()" class="px-6 py-2 bg-red-600/10 border border-red-600/50 text-red-500 hover:bg-red-600 hover:text-white rounded-lg text-xs font-bold transition-all" :disabled="isGameOver">RESIGN</button>
+                    
+                    <button 
+                        @click="offerDraw()" 
+                        :disabled="isGameOver || drawOffer.active"
+                        class="px-4 py-2 bg-blue-600/10 border border-blue-600/50 text-blue-400 hover:bg-blue-600 hover:text-white rounded-lg text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        🤝 Offer Draw
+                    </button>
+                    
+                    <button 
+                        @click="resign()" 
+                        :disabled="isGameOver"
+                        class="px-4 py-2 bg-red-600/10 border border-red-600/50 text-red-500 hover:bg-red-600 hover:text-white rounded-lg text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        🏳️ RESIGN
+                    </button>
                 </div>
             </div>
 
             <div class="lg:col-span-5 space-y-6">
+                <!-- Move History -->
                 <div class="bg-gray-800 rounded-2xl border border-gray-700 h-48 flex flex-col shadow-xl">
                     <div class="p-4 bg-gray-700/30 border-b border-gray-700 text-xs font-black uppercase text-gray-400">Move History</div>
                     <div class="p-4 overflow-y-auto grid grid-cols-2 gap-x-8 gap-y-1 font-mono text-sm" id="moveList">
@@ -98,6 +226,7 @@
                     </div>
                 </div>
 
+                <!-- Chat -->
                 <div class="bg-gray-800 rounded-2xl border border-gray-700 h-64 flex flex-col shadow-xl">
                     <div class="p-4 bg-gray-700/30 border-b border-gray-700 text-xs font-black uppercase text-gray-400">Chat</div>
                     <div class="flex-1 p-4 overflow-y-auto space-y-2 text-sm" x-ref="chatLog">
@@ -106,7 +235,12 @@
                         </template>
                     </div>
                     <div class="p-3 bg-gray-900/50 border-t border-gray-700 flex gap-2">
-                        <input x-model="chatInput" @keyup.enter="sendChat()" class="flex-1 bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none" placeholder="Message...">
+                        <input 
+                            x-model="chatInput" 
+                            @keyup.enter="sendChat()" 
+                            class="flex-1 bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none" 
+                            placeholder="Message..."
+                        >
                         <button @click="sendChat()" class="bg-blue-600 px-4 py-2 rounded text-sm font-bold">Send</button>
                     </div>
                 </div>
@@ -114,6 +248,7 @@
         </div>
     </div>
 
+    <!-- Promotion Modal -->
     <div x-show="showPromotion" class="modal-overlay fixed inset-0 bg-black/90 flex items-center justify-center" x-cloak>
         <div class="bg-gray-800 p-8 rounded-3xl text-center border border-gray-700 shadow-2xl">
             <h3 class="text-xl font-bold mb-6">Promote Pawn</h3>
@@ -135,9 +270,9 @@
     <script>
         function chessGame() {
             return {
-                // FIXED: Times now synced from server
                 whiteTime: parseFloat("{{ game.white_time }}"),
                 blackTime: parseFloat("{{ game.black_time }}"),
+                betAmount: parseFloat("{{ game.bet_amount }}"),
                 isWhitePlayer: "{{ request.user.username }}" === "{{ game.white_player.username }}",
                 activeTurn: "{{ game.current_fen }}".split(" ")[1] === "w" ? "white" : "black",
                 isGameOver: "{{ game.is_active }}" === "False",
@@ -149,7 +284,27 @@
                 chatInput: '',
                 chatMessages: [],
                 gameStarted: {% if game.last_move_timestamp %}true{% else %}false{% endif %},
-                lastUpdateTime: Date.now(), // Track when we last got server update
+                lastUpdateTime: Date.now(),
+                
+                drawOffer: {
+                    active: {% if game.draw_offered_by %}true{% else %}false{% endif %},
+                    fromOpponent: {% if game.draw_offered_by and game.draw_offered_by != request.user %}true{% else %}false{% endif %}
+                },
+                
+                gameEndModal: {
+                    show: false,
+                    title: '',
+                    message: '',
+                    isWinner: false,
+                    isDraw: false
+                },
+                
+                notification: {
+                    show: false,
+                    type: 'info',
+                    title: '',
+                    message: ''
+                },
 
                 initBoard() {
                     this.socket = new WebSocket(`ws://${window.location.host}/ws/chess/{{ game.id }}/`);
@@ -164,26 +319,20 @@
                     this.socket.onmessage = (e) => this.handleSocketMessage(JSON.parse(e.data));
                     this.socket.onopen = () => this.statusMsg = "Live";
                     
-                    // FIXED: Client-side timer only for display smoothness
-                    // Server is the source of truth
                     setInterval(() => {
                         if (!this.isGameOver && this.gameStarted) {
-                            const now = Date.now();
-                            const elapsed = (now - this.lastUpdateTime) / 1000;
-                            
-                            // Only decrement for display purposes between server updates
                             if (this.activeTurn === 'white' && this.whiteTime > 0) {
                                 this.whiteTime = Math.max(0, this.whiteTime - 0.1);
                             } else if (this.activeTurn === 'black' && this.blackTime > 0) {
                                 this.blackTime = Math.max(0, this.blackTime - 0.1);
                             }
                         }
-                    }, 100); // Update display more frequently for smoothness
+                    }, 100);
                 },
 
                 handleSocketMessage(data) {
                     if (data.error) { 
-                        alert(data.error); 
+                        this.showNotification('error', 'Error', data.error);
                         this.board.position(this.board.fen()); 
                         return; 
                     }
@@ -191,13 +340,13 @@
                     if (data.type === 'move') {
                         this.gameStarted = true;
                         this.board.position(data.fen);
-                        
-                        // CRITICAL FIX: Sync times from server (server is source of truth)
                         this.whiteTime = data.white_time;
                         this.blackTime = data.black_time;
                         this.lastUpdateTime = Date.now();
-                        
                         this.activeTurn = data.fen.split(" ")[1] === "w" ? "white" : "black";
+                        
+                        // Clear draw offer after move
+                        this.drawOffer.active = false;
                         
                         const ml = document.getElementById('moveList');
                         const div = document.createElement('div');
@@ -206,28 +355,75 @@
                         ml.appendChild(div);
                         ml.scrollTop = ml.scrollHeight;
 
-                        // Check if game ended
                         if (data.outcome || !data.is_active) { 
-                            this.isGameOver = true; 
-                            this.statusMsg = "GAME OVER";
-                            
-                            let message = "Game Over";
-                            if (data.outcome === 'timeout') {
-                                message = data.winner ? `${data.winner} wins on time!` : "Time out!";
-                            } else if (data.outcome === 'checkmate') {
-                                message = data.winner ? `${data.winner} wins by checkmate!` : "Checkmate!";
-                            } else if (data.outcome) {
-                                message = `Draw by ${data.outcome}`;
-                            }
-                            alert(message);
+                            this.handleGameEnd(data);
                         }
                     } else if (data.type === 'game_over') {
-                        this.isGameOver = true;
-                        this.statusMsg = "GAME OVER";
-                        alert("Winner: " + data.winner + " (" + data.outcome + ")");
+                        this.handleGameEnd(data);
                     } else if (data.type === 'chat') {
                         this.chatMessages.push({ player: data.player, text: data.message });
                         this.$nextTick(() => { this.$refs.chatLog.scrollTop = this.$refs.chatLog.scrollHeight; });
+                    } else if (data.type === 'draw_offer') {
+                        this.drawOffer.active = true;
+                        this.drawOffer.fromOpponent = data.player !== "{{ request.user.username }}";
+                        this.showNotification('info', 'Draw Offered', `${data.player} offered a draw`);
+                    } else if (data.type === 'draw_declined') {
+                        this.drawOffer.active = false;
+                        this.showNotification('info', 'Draw Declined', 'Your draw offer was declined');
+                    }
+                },
+
+                handleGameEnd(data) {
+                    this.isGameOver = true;
+                    this.statusMsg = "GAME OVER";
+                    
+                    let title = "Game Over";
+                    let message = "";
+                    let isWinner = false;
+                    let isDraw = false;
+                    
+                    if (data.winner) {
+                        if (data.winner === "{{ request.user.username }}") {
+                            title = "🎉 Victory!";
+                            message = `You won by ${data.outcome || 'checkmate'}!`;
+                            isWinner = true;
+                            this.createConfetti();
+                        } else {
+                            title = "😞 Defeat";
+                            message = `You lost by ${data.outcome || 'checkmate'}`;
+                        }
+                    } else {
+                        title = "🤝 Draw";
+                        message = data.outcome || "Game drawn by agreement";
+                        isDraw = true;
+                    }
+                    
+                    this.gameEndModal = {
+                        show: true,
+                        title,
+                        message,
+                        isWinner,
+                        isDraw
+                    };
+                },
+
+                showNotification(type, title, message) {
+                    this.notification = { show: true, type, title, message };
+                    setTimeout(() => { this.notification.show = false; }, 5000);
+                },
+                
+                createConfetti() {
+                    for (let i = 0; i < 50; i++) {
+                        setTimeout(() => {
+                            const confetti = document.createElement('div');
+                            confetti.className = 'confetti fixed text-3xl';
+                            confetti.style.left = Math.random() * 100 + '%';
+                            confetti.style.top = '-50px';
+                            confetti.textContent = ['🎉', '🎊', '✨', '⭐'][Math.floor(Math.random() * 4)];
+                            confetti.style.animationDelay = Math.random() * 0.5 + 's';
+                            document.body.appendChild(confetti);
+                            setTimeout(() => confetti.remove(), 3000);
+                        }, i * 100);
                     }
                 },
 
@@ -252,6 +448,23 @@
                     if (confirm("Resign this game?")) {
                         this.socket.send(JSON.stringify({ type: 'resign' }));
                     }
+                },
+                
+                offerDraw() {
+                    if (confirm("Offer a draw to your opponent?")) {
+                        this.socket.send(JSON.stringify({ type: 'offer_draw' }));
+                        this.drawOffer.active = true;
+                        this.drawOffer.fromOpponent = false;
+                    }
+                },
+                
+                acceptDraw() {
+                    this.socket.send(JSON.stringify({ type: 'accept_draw' }));
+                },
+                
+                declineDraw() {
+                    this.socket.send(JSON.stringify({ type: 'decline_draw' }));
+                    this.drawOffer.active = false;
                 },
 
                 selectPromotion(piece) {

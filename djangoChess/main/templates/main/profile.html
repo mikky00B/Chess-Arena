@@ -1,75 +1,172 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-bs-theme="dark">
 <head>
     <meta charset="UTF-8">
-    <title>Profile | Chess dApp</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-gray-900 text-gray-100 min-h-screen font-sans">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profile | Chess Platform</title>
 
-    <nav class="border-b border-gray-800 p-4 bg-gray-900">
-        <div class="container mx-auto flex justify-between items-center">
-            <h1 class="text-2xl font-black tracking-tighter text-blue-500">
-                <a href="{% url 'lobby' %}">CHESS<span class="text-white">DAPP</span></a>
-            </h1>
-            <div class="flex items-center gap-4">
-                <a href="{% url 'lobby' %}" class="text-sm hover:text-blue-400">← Back to Lobby</a>
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <!-- Google Font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --bs-body-font-family: 'Lexend', sans-serif;
+        }
+        body {
+            background-color: #1a1a1a;
+            background-image: radial-gradient(circle at 1px 1px, #444 1px, transparent 0);
+            background-size: 20px 20px;
+        }
+        /* Consistent Glassmorphism Card Style */
+        .card-glass {
+            background: rgba(40, 40, 40, 0.6);
+            border-radius: 16px;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .table {
+            --bs-table-bg: transparent;
+            --bs-table-border-color: rgba(255, 255, 255, 0.15);
+            --bs-table-striped-bg: rgba(255, 255, 255, 0.03);
+        }
+    </style>
+</head>
+
+<body class="py-5">
+
+    <main class="container">
+
+        <!-- Profile Header -->
+        <header class="d-flex flex-column flex-md-row justify-content-between align-items-center pb-4 mb-4 border-bottom border-secondary">
+            <div>
+                <h1 class="display-5 fw-bold">{{ request.user.username }}</h1>
+                <p class="text-warning fs-4 mb-0">
+                    <i class="bi bi-star-fill"></i>
+                    <strong class="ms-1">{{ profile.rating }} ELO</strong>
+                </p>
+            </div>
+            <a href="{% url 'lobby' %}" class="btn btn-outline-secondary btn-lg mt-3 mt-md-0">
+                <i class="bi bi-arrow-left me-2"></i> Back to Lobby
+            </a>
+        </header>
+
+        <!-- ETH Address Alert -->
+        {% if not profile.ethereum_address %}
+        <div class="alert alert-warning d-flex align-items-center" role="alert">
+            <i class="bi bi-exclamation-triangle-fill flex-shrink-0 me-3 fs-4"></i>
+            <div>
+                Your Ethereum address is not set. You must set it before you can play wagered games. 
+                <a href="{% url 'set_ethereum_address' %}" class="alert-link">Set address now</a>.
             </div>
         </div>
-    </nav>
+        {% endif %}
 
-    <main class="container mx-auto py-12 px-4 max-w-4xl">
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <!-- Profile Info -->
-            <div class="bg-gray-800 rounded-2xl border border-gray-700 p-6 shadow-xl">
-                <h2 class="text-2xl font-bold mb-6">Profile</h2>
-                <div class="space-y-4">
-                    <div>
-                        <p class="text-sm text-gray-400">Username</p>
-                        <p class="text-xl font-bold">{{ request.user.username }}</p>
+        <div class="row g-4">
+            <!-- Stats Column -->
+            <div class="col-lg-4">
+                <div class="card card-glass h-100">
+                    <div class="card-header fs-5 fw-light border-0">
+                        <i class="bi bi-bar-chart-line-fill me-2"></i> Statistics
                     </div>
-                    <div>
-                        <p class="text-sm text-gray-400">Rating</p>
-                        <p class="text-2xl font-bold text-green-400">{{ profile.rating }}</p>
-                    </div>
-                    <div>
-                        <p class="text-sm text-gray-400">Ethereum Address</p>
-                        {% if profile.ethereum_address %}
-                        <p class="text-sm font-mono text-blue-400 break-all">{{ profile.ethereum_address }}</p>
-                        <a href="{% url 'set_ethereum_address' %}" class="text-xs text-gray-400 hover:text-blue-400">Change address</a>
-                        {% else %}
-                        <p class="text-sm text-red-400">Not set</p>
-                        <a href="{% url 'set_ethereum_address' %}" class="text-xs text-blue-400 hover:text-blue-300">Set address now →</a>
-                        {% endif %}
+                    <div class="card-body">
+                        <ul class="list-group list-group-flush">
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <span><i class="bi bi-joystick me-2 text-muted"></i>Games Played</span>
+                                <span class="fs-4 fw-bold">{{ games_played }}</span>
+                            </li>
+                             <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <span><i class="bi bi-trophy me-2 text-muted"></i>Games Won</span>
+                                <span class="fs-4 fw-bold text-success">{{ games_won }}</span>
+                            </li>
+                             <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <span><i class="bi bi-pie-chart me-2 text-muted"></i>Win Rate</span>
+                                <span class="fs-4 fw-bold text-info">
+                                    {% if games_played > 0 %}{{ games_won|floatformat:0 }}%{% else %}N/A{% endif %}
+                                </span>
+                            </li>
+                             <li class="list-group-item pt-3">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span><i class="bi bi-wallet2 me-2 text-muted"></i>ETH Address</span>
+                                    <a href="{% url 'set_ethereum_address' %}" class="btn btn-sm btn-outline-secondary">Change</a>
+                                </div>
+                                <p class="font-monospace text-primary small mt-2 mb-0 text-break">{{ profile.ethereum_address|default:"Not set" }}</p>
+                            </li>
+                        </ul>
                     </div>
                 </div>
             </div>
 
-            <!-- Stats -->
-            <div class="bg-gray-800 rounded-2xl border border-gray-700 p-6 shadow-xl">
-                <h2 class="text-2xl font-bold mb-6">Statistics</h2>
-                <div class="space-y-4">
-                    <div class="flex justify-between items-center">
-                        <span class="text-gray-400">Games Played</span>
-                        <span class="text-2xl font-bold">{{ games_played }}</span>
+            <!-- Game History Column -->
+            <div class="col-lg-8">
+                <div class="card card-glass h-100">
+                     <div class="card-header fs-5 fw-light border-0">
+                        <i class="bi bi-clock-history me-2"></i> Game History
                     </div>
-                    <div class="flex justify-between items-center">
-                        <span class="text-gray-400">Games Won</span>
-                        <span class="text-2xl font-bold text-green-400">{{ games_won }}</span>
-                    </div>
-                    <div class="flex justify-between items-center">
-                        <span class="text-gray-400">Win Rate</span>
-                        <span class="text-2xl font-bold text-blue-400">
-                            {% if games_played > 0 %}
-                                {{ games_won|floatformat:0 }}%
-                            {% else %}
-                                N/A
-                            {% endif %}
-                        </span>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th scope="col">Opponent</th>
+                                        <th scope="col" class="text-center">Result</th>
+                                        <th scope="col" class="text-center">Wager (ETH)</th>
+                                        <th scope="col">Date</th>
+                                        <th scope="col"></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for game in game_history %}
+                                        <tr>
+                                            <td>
+                                                {% if game.white_player == request.user %}
+                                                    {{ game.black_player.username }}
+                                                {% else %}
+                                                    {{ game.white_player.username }}
+                                                {% endif %}
+                                            </td>
+                                            <td class="text-center">
+                                                {% if game.winner == request.user %}
+                                                    <span class="badge text-bg-success">Win</span>
+                                                {% elif game.winner %}
+                                                     <span class="badge text-bg-danger">Loss</span>
+                                                {% else %}
+                                                     <span class="badge text-bg-secondary">Draw</span>
+                                                {% endif %}
+                                            </td>
+                                            <td class="text-center">
+                                                {% if game.bet_amount > 0 %}
+                                                    <span class="font-monospace small">{{ game.bet_amount }}</span>
+                                                {% else %}
+                                                    <span class="text-muted small">—</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>{{ game.created_at|date:"M d, Y" }}</td>
+                                            <td class="text-end">
+                                                <a href="{% url 'game_detail' game.id %}" class="btn btn-sm btn-outline-info">View</a>
+                                            </td>
+                                        </tr>
+                                    {% empty %}
+                                        <tr>
+                                            <td colspan="5" class="text-center text-muted p-4">You haven't played any games yet.</td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

@@ -57,7 +57,7 @@ const ChessWeb3 = {
     async loadContract() {
         try {
             // Fetch ABI from Django backend
-            const response = await fetch('/api/contract-abi/');
+            const response = await fetch('/chess/api/contract-abi/');
             const data = await response.json();
             
             if (!data.success) {
@@ -89,6 +89,18 @@ const ChessWeb3 = {
                     "inputs": [
                         {"name": "game_id", "type": "uint256"},
                         {"name": "winner", "type": "address"},
+                        {"name": "v", "type": "uint256"},
+                        {"name": "r", "type": "bytes32"},
+                        {"name": "s", "type": "bytes32"}
+                    ],
+                    "outputs": []
+                },
+                {
+                    "type": "function",
+                    "name": "settle_draw",
+                    "stateMutability": "nonpayable",
+                    "inputs": [
+                        {"name": "game_id", "type": "uint256"},
                         {"name": "v", "type": "uint256"},
                         {"name": "r", "type": "bytes32"},
                         {"name": "s", "type": "bytes32"}
@@ -293,6 +305,70 @@ const ChessWeb3 = {
         }
     },
     
+
+        // Claim refund after a draw
+    async claimRefund() {
+        this.updateStatus('🔄 Fetching draw signature...', 'info');
+
+        try {
+            // Get draw signature from backend
+            const response = await fetch(`/chess/api/get-signature/{{ game.id }}/`, {
+                credentials: 'same-origin',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                throw new Error('Server returned non-JSON response. Are you logged in?');
+            }
+
+            const data = await response.json();
+
+            if (!data.success) {
+                this.updateStatus('❌ ' + data.message, 'error');
+                alert(data.message);
+                return;
+            }
+
+            if (!data.is_draw) {
+                alert('This game was not a draw.');
+                return;
+            }
+
+            const { signature } = data;
+
+            const accounts = await this.web3.eth.getAccounts();
+            const userAccount = this.userAddress || accounts[0];
+
+            this.updateStatus('🔄 Claiming refund...', 'info');
+
+            // Call settle_draw on contract
+            const tx = await this.contract.methods.settle_draw(
+                this.gameId,
+                signature.v,
+                signature.r,
+                signature.s
+            ).send({
+                from: userAccount,
+                gas: 300000
+            });
+
+            this.updateStatus('✅ Refund claimed successfully!', 'success');
+            console.log('Refund tx:', tx.transactionHash);
+
+            // Save refund transaction to backend
+            await this.saveClaimTx(tx.transactionHash);
+
+            alert(`💰 Refund successful! ${this.betAmount} ETH returned.`);
+
+        } catch (error) {
+            console.error('Refund error:', error);
+            this.updateStatus('❌ Refund failed: ' + error.message, 'error');
+        }
+    },
+
     // Save deposit transaction hash to backend
     async saveDepositTx(txHash) {
         try {

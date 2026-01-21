@@ -25,32 +25,25 @@ judge_account = Account.from_key(settings.JUDGE_PRIVATE_KEY)
 
 
 def generate_winner_signature(game_id: int, winner_address: str) -> tuple:
-    # 1. Standardize addresses
     winner_address = w3.to_checksum_address(winner_address)
     contract_address = w3.to_checksum_address(settings.CHESS_CONTRACT_ADDRESS)
 
     print(f"Generating signature for Game {game_id}")
 
-    # 2. ABI Encode the data (Matches Vyper's convert(x, bytes32) + concat)
-    # This pads game_id, winner, and contract to 32 bytes each.
+    # This matches Vyper's: convert(game_id, bytes32), convert(winner, bytes32), convert(self, bytes32)
     encoded_data = eth_abi.encode(
         ["uint256", "address", "address"], [game_id, winner_address, contract_address]
     )
 
-    # 3. Create the data hash
     data_hash = w3.keccak(encoded_data)
     print(f"  Data hash: {data_hash.hex()}")
 
-    # 4. Wrap with EIP-191 prefix
-    # encode_defunct is the standard way to do this in Web3.py
     message = encode_defunct(primitive=data_hash)
 
-    # 5. Sign (using your existing judge_account logic)
     signed_message = w3.eth.account.sign_message(
         message, private_key=settings.JUDGE_PRIVATE_KEY
     )
 
-    # 6. Extract components
     v = signed_message.v
     r_hex = w3.to_hex(signed_message.r)
     s_hex = w3.to_hex(signed_message.s)
@@ -65,22 +58,35 @@ def generate_winner_signature(game_id: int, winner_address: str) -> tuple:
 
 def generate_draw_signature(game_id: int) -> tuple:
     """
-    Generate signature for draw settlement using consistent ABI encoding.
+    Generate signature for draw settlement.
+    Matches Vyper's: convert(game_id, bytes32), convert("DRAW", Bytes[4]), convert(self, bytes32)
     """
     contract_address = w3.to_checksum_address(settings.CHESS_CONTRACT_ADDRESS)
 
-    # 1. Matches Vyper's concat(convert(game_id, bytes32), convert("DRAW", bytes32)...)
-    # Note: "string" in eth_abi pads differently than a fixed bytes32.
-    # If your Vyper contract uses 'bytes32' for the "DRAW" label, use 'bytes32' here.
-    encoded_data = eth_abi.encode(
-        ["uint256", "string", "address"], [game_id, "DRAW", contract_address]
-    )
+    # Convert "DRAW" to bytes (Vyper uses Bytes[4])
+    draw_bytes = b"DRAW"  # This is exactly 4 bytes
 
-    # 2. Hash and wrap
-    data_hash = w3.keccak(encoded_data)
+    # Match Vyper's concat(convert(game_id, bytes32), convert("DRAW", Bytes[4]), convert(self, bytes32))
+    # We need to manually build this since eth_abi doesn't have a "Bytes[4]" type
+
+    # Convert game_id to bytes32 (left-padded)
+    game_id_bytes = game_id.to_bytes(32, byteorder="big")
+
+    # "DRAW" is just the raw bytes
+    # draw_bytes is already b"DRAW"
+
+    # Convert contract address to bytes32 (left-padded with 12 zero bytes)
+    contract_bytes = bytes.fromhex(contract_address[2:].zfill(64))
+
+    # Concatenate: game_id (32 bytes) + "DRAW" (4 bytes) + contract (32 bytes)
+    concatenated = game_id_bytes + draw_bytes + contract_bytes
+
+    # Hash the concatenated data
+    data_hash = w3.keccak(concatenated)
+
+    # Wrap with Ethereum Signed Message
     message = encode_defunct(primitive=data_hash)
 
-    # 3. Sign using the standard Web3.py method
     signed_message = w3.eth.account.sign_message(
         message, private_key=settings.JUDGE_PRIVATE_KEY
     )

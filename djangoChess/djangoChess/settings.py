@@ -140,7 +140,7 @@ CHANNEL_LAYERS = {
     },
 }
 
-LOGIN_URL = "login"
+LOGIN_URL = "chesslogin"
 LOGIN_REDIRECT_URL = "lobby"
 LOGOUT_REDIRECT_URL = "login"
 

@@ -30,7 +30,7 @@
                 {% endfor %}
             {% endif %}
 
-            <form method="POST" class="space-y-6">
+            <form method="POST" class="space-y-6" id="createGameForm">
                 {% csrf_token %}
                 
                 <div>
@@ -47,6 +47,31 @@
                     <p class="text-xs text-gray-400 mt-2">
                         Set to 0 for a free game, or enter an amount to play for real ETH.
                     </p>
+                </div>
+
+                <div class="bg-gray-900/50 rounded-lg p-4">
+                    <label class="flex items-center cursor-pointer">
+                        <input 
+                            type="checkbox" 
+                            name="is_private" 
+                            class="w-5 h-5 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500"
+                            onchange="togglePrivateInfo(this.checked)"
+                        >
+                        <span class="ml-3 text-sm font-bold">🔒 Make this a private game</span>
+                    </label>
+                    <p class="text-xs text-gray-400 mt-2 ml-8">
+                        Private games won't appear in the public lobby. You'll get a unique link to share with your opponent.
+                    </p>
+                </div>
+
+                <div id="privateInfo" class="hidden bg-blue-900/20 border border-blue-600 rounded-lg p-4 text-sm">
+                    <p class="text-blue-400 font-bold mb-2">🔗 Private Game Mode</p>
+                    <ul class="text-gray-300 space-y-1 ml-4">
+                        <li>• Your game won't appear in the public lobby</li>
+                        <li>• You'll receive a unique link to share</li>
+                        <li>• Only players with the link can join</li>
+                        <li>• Perfect for playing with specific friends</li>
+                    </ul>
                 </div>
 
                 <div class="bg-gray-900/50 rounded-lg p-4 text-sm space-y-2">
@@ -76,5 +101,16 @@
             </form>
         </div>
     </main>
+
+    <script>
+        function togglePrivateInfo(isPrivate) {
+            const privateInfo = document.getElementById('privateInfo');
+            if (isPrivate) {
+                privateInfo.classList.remove('hidden');
+            } else {
+                privateInfo.classList.add('hidden');
+            }
+        }
+    </script>
 </body>
 </html>

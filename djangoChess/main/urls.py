@@ -9,7 +9,7 @@ urlpatterns = [
     # Existing routes
     path("", views.lobby, name="lobby"),
     path("signup/", views.signup, name="signup"),
-    path("signin/", views.signin, name="login"),
+    path("login/", views.login_view, name="login"),
     path("game/<int:game_id>/", views.game_detail, name="game_detail"),
     path("create/", views.create_game, name="create_game"),
     path("join/<int:game_id>/", views.join_game, name="join_game"),
@@ -17,6 +17,11 @@ urlpatterns = [
     # Profile and settings
     path("profile/", views.profile_view, name="profile"),
     path("set-address/", views.set_ethereum_address, name="set_ethereum_address"),
+    path(
+        "join-private/<str:link_code>/",
+        views.join_private_game,
+        name="join_private_game",
+    ),
     # Blockchain API routes
     path("api/contract-abi/", blockchain_views.get_contract_abi, name="contract_abi"),
     path(
@@ -28,7 +33,7 @@ urlpatterns = [
         "api/get-signature/<int:game_id>/",
         blockchain_views.get_signature,
         name="get_signature",
-    ),
+    ),  # Make sure this line exists!
     path(
         "api/mark-payout/<int:game_id>/",
         blockchain_views.mark_payout_claimed,
