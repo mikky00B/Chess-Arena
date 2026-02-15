@@ -1,199 +1,133 @@
-# Chess dApp - Blockchain-Based Chess with Real Stakes
+# Escrow Chess Prototype (Demo)
 
-A full-stack decentralized chess platform where players can challenge each other with real cryptocurrency at stake. Built with Django, Vyper smart contracts, and real-time WebSocket gameplay.
+Portfolio project: a real-time chess platform with optional blockchain settlement.
 
-## 🎯 Features
+Status: Demonstration project, not production-ready.
 
-- **Real-time multiplayer chess** using Django Channels and WebSockets
-- **Blockchain escrow system** with Vyper smart contracts
-- **ELO rating system** for competitive play
-- **Server-side time control** to prevent cheating
-- **Judge-signed payouts** for secure fund distribution
-- **Draw handling** with automatic refunds
-- **Abandonment protection** with timeout claims
+## Why This Exists
 
-## 🏗️ Architecture
+This project is a systems-design and engineering demo. It showcases:
+- Real-time multiplayer game state over WebSockets
+- Off-chain authoritative chess logic and timing controls
+- On-chain escrow and settlement integration
+- End-to-end testing, CI, ops docs, and threat-modeling artifacts
+
+## Critical Flaws (Known and Intentional Tradeoffs)
+
+This repository is intentionally transparent about product viability limits:
+
+1. Centralized adjudication
+- A server-side "judge" signs outcomes. This is a trust bottleneck and a single point of failure.
+
+2. Anti-cheat is incomplete
+- No strong engine-detection or behavioral modeling pipeline. High-stakes competitive integrity is not solved.
+
+3. UX and cost friction
+- Wallet operations, gas fees, and confirmation delays create onboarding and retention risk versus normal chess apps.
+
+
+## Features
+
+- Real-time multiplayer chess using Django Channels and WebSockets
+- Blockchain escrow settlement with Vyper smart contracts
+- ELO rating system
+- Server-side clock/timer control
+- Judge-signed payout claims
+- Draw settlement and abandonment handling
+
+## Architecture
 
 ### Frontend
-- **Django Templates** with Tailwind CSS
-- **Alpine.js** for reactive UI components
-- **Chessboard.js** for chess piece visualization
-- **HTMX** for dynamic lobby updates
+- Django templates, Tailwind CSS, Alpine.js, HTMX
 
 ### Backend
-- **Django** for web framework
-- **Django Channels** for WebSocket connections
-- **Python-chess** for move validation and game logic
-- **PostgreSQL** for data persistence
-- **Redis** for channel layer
+- Django + Django Channels
+- python-chess for move validation
+- PostgreSQL for persistence
+- Redis for channel layer
 
 ### Blockchain
-- **Vyper smart contracts** for escrow logic
-- **Web3.py** for blockchain interaction
-- **EIP-191 compliant signatures** for security
-- **Judge oracle pattern** for off-chain computation verification
+- Vyper contracts for escrow and payout rules
+- Web3.py and EIP-191 signatures
+- Judge-oracle pattern for off-chain result authorization
 
+## Project Structure
 
-## 📁 Project Structure
-
-```
+```text
 Chesschallenge/
-├── djangoChess/                 # Off-chain: Real-time Game Engine (Django)
-│   ├── main/
-│   │   ├── models.py            # Database models (Game, Move, Profile)
-│   │   ├── views.py             # HTTP view logic
-│   │   ├── consumers.py         # WebSocket logic (Real-time moves & chat)
-│   │   ├── chess_logic.py       # Python-chess move validation
-│   │   ├── blockchain_utils.py  # EIP-191 Signature generation (The "Judge")
-│   │   ├── blockchain_views.py  # Endpoints for contract interaction
-│   │   ├── signals.py           # Post-game logic (ELO & cleanup)
-│   │   ├── templates/           # Alpine.js & Tailwind UI
-│   │   │   └── main/
-│   │   │       ├── lobby.html   # Matchmaking area
-│   │   │       └── board2.html  # Live game interface (Synced timers)
-│   │   └── routing.py           # WebSocket URL routing
-│   ├── manage.py                # Django CLI
-│   └── requirements.txt         # Backend dependencies
-│
-├── chess_blockchain/            # On-chain: Financial Settlement (Vyper)
-│   ├── src/
-│   │   └── chessgame.vy         # Smart Contract (Escrow, Draws, Payouts)
-│   ├── script/                  # Deployment & interaction scripts
-│   ├── moccasin.toml            # Vyper/Moccasin configuration
-│   └── tests/                   # Smart contract unit tests
-│
-└── .gitignore                   # Consolidated global ignore rules
+|-- djangoChess/                 # Off-chain real-time game engine
+|   |-- main/
+|   |   |-- models.py
+|   |   |-- views.py
+|   |   |-- consumers.py
+|   |   |-- blockchain_utils.py
+|   |   |-- blockchain_views.py
+|   |   |-- signals.py
+|   |   `-- templates/main/
+|   `-- requirements.txt
+|-- chess_blockchain/            # On-chain settlement layer
+|   |-- src/chessgame.vy
+|   |-- script/
+|   |-- moccasin.toml
+|   `-- tests/
+|-- docker-compose.yml
+`-- .github/workflows/ci.yml
 ```
 
-## 🚀 Getting Started
-
-### 1. Clone and Install
+## Getting Started
 
 ```bash
-git clone <https://github.com/yourusername/chess-Arena>
-# 1. Setup Django Backend
+# from repo root
 cd djangoChess
 python -m venv .venv
-source .venv/bin/activate  
+source .venv/bin/activate
 pip install -r requirements.txt
 
-# 2. Setup Blockchain Environment (Moccasin)
 cd ../chess_blockchain
-# Moccasin uses uv or pip
 pip install moccasin vyper
 moccasin install
 ```
 
-
-### 3. Deploy Smart Contract
-
-```bash
-# Compile contract
-vyper chessgame.vy -f abi > chessgame_abi.json
-vyper chessgame.vy -f bytecode > chessgame_bytecode.txt
-
-# Deploy (use provided script or manually)
-python deploy_contract.py
-```
-
-### 4. Run Migrations
+Run migrations and app:
 
 ```bash
-python manage.py makemigrations
+cd ../djangoChess
 python manage.py migrate
-python manage.py createsuperuser
-```
-
-### 5. Start Services
-
-```bash
-# Terminal 1: Redis
-redis-server
-
-# Terminal 2: Django
 python manage.py runserver
 ```
 
-See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed production setup.
+## How It Works
 
-## 🎮 How It Works
+1. Player A creates a challenge and funds escrow.
+2. Player B joins and matches stake.
+3. Game runs off-chain in real time.
+4. Server determines result.
+5. Judge signs settlement payload.
+6. Winner (or both players for draw) settles on-chain.
 
-### Game Flow
-
-1. **Create Challenge**: Player 1 creates a game and deposits ETH
-2. **Join Game**: Player 2 joins and matches the bet
-3. **Play**: Real-time chess with WebSocket updates
-4. **Outcome**: Server determines winner/draw
-5. **Signature**: Django generates judge-signed payout authorization
-6. **Claim**: Winner calls smart contract with signature to claim funds
-
-### Smart Contract Functions
-
-- `deposit(game_id)`: Create or join a challenge with ETH
-- `claim_winnings(game_id, winner, v, r, s)`: Claim pot with judge signature
-- `settle_draw(game_id, v, r, s)`: Refund both players on draw
-- `claim_abandonment(game_id)`: Claim pot if opponent times out
-
-### API Endpoints
-
-- `POST /api/verify-deposit/<game_id>/`: Verify deposit transaction
-- `GET /api/get-signature/<game_id>/`: Get signature for claiming
-- `POST /api/mark-payout/<game_id>/`: Mark payout as claimed
-- `GET /api/challenge-info/<game_id>/`: Get on-chain challenge state
-- `POST /api/update-address/`: Update user's Ethereum address
-- `GET /api/estimate-gas/<game_id>/`: Estimate claim gas cost
-
-## 🧪 Testing
+## Testing
 
 ```bash
-# Run tests
 pytest
-
-# With coverage
-pytest --cov=main --cov-report=html
+pytest chess_blockchain/tests -q
+python djangoChess/manage.py check
 ```
 
-## 🐛 Known Limitations
-
-1. **Chess Engine Detection**: No automated anti-cheat system
-   - Recommendation: Keep stakes low ($1-5) to discourage cheating
-   - Future: Implement statistical move analysis
-
-2. **Centralization**: Judge server must sign all payouts
-   - Trade-off: Allows off-chain chess computation while maintaining security
-
-
-## 🛠️ Tech Stack
+## Tech Stack
 
 | Layer | Technology |
-|-------|-----------|
-| Smart Contracts | Vyper 0.4.0 |
-| Backend | Django 4.2 |
-| Database | PostgreSQL |
-| Cache/Channels | Redis |
-| WebSockets | Django Channels |
-| Blockchain | Web3.py, eth-account |
-| Frontend | Tailwind CSS, Alpine.js |
-| Chess Logic | python-chess |
+|---|---|
+| Smart contracts | Vyper |
+| Backend | Django, Django Channels |
+| Data | PostgreSQL, Redis |
+| Blockchain integration | Web3.py, eth-account |
+| Frontend | Django templates, Tailwind, Alpine.js, HTMX |
+| Chess engine | python-chess |
 
-## 📝 License
+## Disclaimer
 
-MIT License - See LICENSE file for details
+Educational and portfolio software only. Do not treat this as production financial infrastructure.
 
-## 🤝 Contributing
+## License
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
-
-## ⚠️ Disclaimer
-
-This is educational/portfolio software. Use at your own risk. Always test thoroughly on testnets before deploying to mainnet. Never bet more than you can afford to lose.
-
-## 📧 Contact
-
-Your Name - [@Clever00__](https://twitter.com/Clever00__)
-
-Project Link: [https://github.com/yourusername/chess-Arena](https://github.com/yourusername/chess-Arena)
+MIT. See `LICENSE`.

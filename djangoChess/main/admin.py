@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Profile, Game, Move
+from .models import Profile, Game, Move, SecurityEvent
 
 
 @admin.register(Profile)
@@ -21,7 +21,7 @@ class ProfileAdmin(admin.ModelAdmin):
 class MoveInline(admin.TabularInline):
     model = Move
     extra = 0
-    readonly_fields = ("move_san", "move_number", "timestamp")
+    readonly_fields = ("move_san", "move_number", "think_time_seconds", "timestamp")
     can_delete = False
     ordering = ("move_number",)
 
@@ -131,6 +131,7 @@ class MoveAdmin(admin.ModelAdmin):
         "game",
         "move_number",
         "move_san",
+        "think_time_seconds",
         "timestamp",
     )
     list_filter = ("timestamp",)
@@ -139,3 +140,12 @@ class MoveAdmin(admin.ModelAdmin):
         "move_san",
     )
     ordering = ("game", "move_number")
+
+
+@admin.register(SecurityEvent)
+class SecurityEventAdmin(admin.ModelAdmin):
+    list_display = ("created_at", "event_type", "status", "user", "game")
+    list_filter = ("event_type", "status", "created_at")
+    search_fields = ("event_type", "status", "user__username", "game__id")
+    ordering = ("-created_at",)
+    readonly_fields = ("created_at",)

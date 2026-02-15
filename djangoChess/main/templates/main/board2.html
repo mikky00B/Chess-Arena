@@ -9,8 +9,17 @@
     <style>
         [x-cloak] { display: none !important; }
         .modal-overlay { z-index: 9999 !important; }
-        .timer-active { @apply border-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.4)] bg-blue-900/20; }
-        #myBoard { @apply rounded-xl overflow-hidden border-4 border-gray-800 shadow-2xl; }
+        .timer-active {
+            border-color: rgb(59 130 246) !important;
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.4);
+            background-color: rgba(30, 58, 138, 0.2);
+        }
+        #myBoard {
+            border-radius: 0.75rem;
+            overflow: hidden;
+            border: 4px solid rgb(31 41 55);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        }
         .piece-417db { max-width: none !important; }
         
         @keyframes slideDown {
@@ -131,29 +140,27 @@
                         >
                             🔍 Check Status
                         </button>
-                        {% if not game.is_active and game.winner == request.user %}
-                        <button 
-                            onclick="ChessWeb3.claimWinnings()" 
+                                                <button 
+                            onclick="ChessWeb3.claimWinnings()"
+                                                       x-show="isGameOver && gameEndModal.isWinner"
                             class="bg-green-600 hover:bg-green-500 px-4 py-2 rounded-lg text-sm font-bold transition-all"
                         >
                             🎉 Claim Winnings
                         </button>
-                        {% endif %}
-                        {% if not game.is_active and not game.winner %}
-                        <button 
-                            onclick="ChessWeb3.claimRefund()" 
+                                                                        <button 
+                            onclick="ChessWeb3.claimRefund()"
+                                                       x-show="isGameOver && gameEndModal.isDraw"
                             class="bg-purple-600 hover:bg-purple-500 px-4 py-2 rounded-lg text-sm font-bold transition-all"
                         >
                             💰 Claim Refund (Draw)
                         </button>
-                        {% endif %}
-                    </div>
+                                            </div>
                 </div>
             </div>
         </div>
         {% endif %}
-        
-        <!-- Draw Offer Banner -->
+
+
         <div x-show="drawOffer.active" x-cloak class="mb-6 bg-blue-900/20 border border-blue-600 rounded-xl p-4 max-w-[950px] mx-auto">
             <div class="flex items-center justify-between">
                 <div>
@@ -281,16 +288,17 @@
                 pendingMove: null,
                 socket: null,
                 board: null,
+                serverFen: "{{ game.current_fen }}",
                 chatInput: '',
                 chatMessages: [],
                 gameStarted: {% if game.last_move_timestamp %}true{% else %}false{% endif %},
                 lastUpdateTime: Date.now(),
-                
+
                 drawOffer: {
                     active: {% if game.draw_offered_by %}true{% else %}false{% endif %},
                     fromOpponent: {% if game.draw_offered_by and game.draw_offered_by != request.user %}true{% else %}false{% endif %}
                 },
-                
+
                 gameEndModal: {
                     show: false,
                     title: '',
@@ -298,7 +306,7 @@
                     isWinner: false,
                     isDraw: false
                 },
-                
+
                 notification: {
                     show: false,
                     type: 'info',
@@ -307,10 +315,11 @@
                 },
 
                 initBoard() {
-                    this.socket = new WebSocket(`ws://${window.location.host}/ws/chess/{{ game.id }}/`);
+                    const wsScheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
+                    this.socket = new WebSocket(`${wsScheme}://${window.location.host}/ws/chess/{{ game.id }}/`);
                     this.board = Chessboard('myBoard', {
                         draggable: true,
-                        position: "{{ game.current_fen }}",
+                        position: this.serverFen,
                         orientation: this.isWhitePlayer ? 'white' : 'black',
                         onDrop: (s, t, p) => this.onDrop(s, t, p),
                         pieceTheme: (p) => `https://upload.wikimedia.org/wikipedia/commons/${this.getPieceImg(p)}`
@@ -333,12 +342,14 @@
                 handleSocketMessage(data) {
                     if (data.error) { 
                         this.showNotification('error', 'Error', data.error);
-                        this.board.position(this.board.fen()); 
+                        if (data.fen) this.serverFen = data.fen;
+                        this.board.position(this.serverFen, false);
                         return; 
                     }
                     
                     if (data.type === 'move') {
                         this.gameStarted = true;
+                        this.serverFen = data.fen;
                         this.board.position(data.fen);
                         this.whiteTime = data.white_time;
                         this.blackTime = data.black_time;
@@ -435,6 +446,9 @@
 
                 onDrop(source, target, piece) {
                     if (this.isGameOver || source === target) return 'snapback';
+                    const pieceColor = piece?.[0] === 'w' ? 'white' : 'black';
+                    const myColor = this.isWhitePlayer ? 'white' : 'black';
+                    if (pieceColor !== myColor || this.activeTurn !== myColor) return 'snapback';
                     const isProm = (piece === 'wP' && target[1] === '8') || (piece === 'bP' && target[1] === '1');
                     if (isProm) { 
                         this.pendingMove = { source, target }; 
@@ -504,3 +518,6 @@
     </script>
 </body>
 </html>
+
+
+

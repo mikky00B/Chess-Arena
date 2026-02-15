@@ -1,67 +1,46 @@
-"""
-Load contract ABI from Moccasin compilation output
-"""
+"""Load compiled contract artifacts."""
 
 import json
-import os
+import logging
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
+
+
+def _artifact_path() -> Path:
+    django_root = Path(__file__).parent.parent
+    project_root = django_root.parent
+    return project_root / "chess_blockchain" / "out" / "chessgame.json"
+
+
+def _load_artifact() -> dict:
+    path = _artifact_path()
+    if not path.exists():
+        raise FileNotFoundError(
+            f"Contract artifact not found at {path}. Run 'moccasin compile' in chess_blockchain."
+        )
+    with path.open("r", encoding="utf-8") as file_handle:
+        return json.load(file_handle)
 
 
 def get_contract_abi():
-    """
-    Load the ChessGame contract ABI from Moccasin output.
-
-    Returns:
-        list: Contract ABI
-    """
-    # Get the project root (assumes this file is in djangoChess/main/)
-    django_root = Path(__file__).parent.parent
-    project_root = django_root.parent
-
-    # Path to Moccasin output
-    abi_path = project_root / "chess_blockchain" / "out" / "chessgame.json"
-
-    if not abi_path.exists():
-        raise FileNotFoundError(
-            f"Contract ABI not found at {abi_path}. "
-            "Please run 'moccasin compile' in the chess_blockchain directory first."
-        )
-
-    with open(abi_path, "r") as f:
-        contract_data = json.load(f)
-
-    # Moccasin output includes abi, bytecode, etc.
-    return contract_data["abi"]
+    artifact = _load_artifact()
+    abi = artifact.get("abi")
+    if not abi:
+        raise ValueError("ABI missing from compiled artifact")
+    return abi
 
 
 def get_contract_bytecode():
-    """
-    Load the ChessGame contract bytecode from Moccasin output.
-
-    Returns:
-        str: Contract bytecode
-    """
-    django_root = Path(__file__).parent.parent
-    project_root = django_root.parent
-
-    abi_path = project_root / "chess_blockchain" / "out" / "chessgame.json"
-
-    if not abi_path.exists():
-        raise FileNotFoundError(
-            f"Contract bytecode not found at {abi_path}. "
-            "Please run 'moccasin compile' in the chess_blockchain directory first."
-        )
-
-    with open(abi_path, "r") as f:
-        contract_data = json.load(f)
-
-    return contract_data["bytecode"]["object"]
+    artifact = _load_artifact()
+    bytecode = artifact.get("bytecode", {}).get("object")
+    if not bytecode:
+        raise ValueError("Bytecode missing from compiled artifact")
+    return bytecode
 
 
-# Load ABI once at module import
 try:
     CONTRACT_ABI = get_contract_abi()
-except FileNotFoundError as e:
-    print(f"Warning: {e}")
+except Exception as exc:
+    logger.warning("Contract ABI unavailable: %s", exc)
     CONTRACT_ABI = []
-    print(CONTRACT_ABI)  # Empty ABI as fallback

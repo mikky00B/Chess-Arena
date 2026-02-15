@@ -60,4 +60,5 @@ htmlcov/
 node_modules/
 dist/
 build/
-
+SECURITY_THREAT_MODEL.md
+RUNBOOK.md

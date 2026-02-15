@@ -3,13 +3,15 @@ Add these URL patterns to your main urls.py or app urls.py
 """
 
 from django.urls import path
-from . import views, blockchain_views
+from django.contrib.auth.views import LogoutView
+from . import views, blockchain_views, ops_views
 
 urlpatterns = [
     # Existing routes
     path("", views.lobby, name="lobby"),
     path("signup/", views.signup, name="signup"),
     path("login/", views.login_view, name="login"),
+    path("logout/", LogoutView.as_view(), name="logout"),
     path("game/<int:game_id>/", views.game_detail, name="game_detail"),
     path("create/", views.create_game, name="create_game"),
     path("join/<int:game_id>/", views.join_game, name="join_game"),
@@ -53,5 +55,13 @@ urlpatterns = [
         "api/estimate-gas/<int:game_id>/",
         blockchain_views.estimate_gas,
         name="estimate_gas",
+    ),
+    path("health/live/", ops_views.health_live, name="health_live"),
+    path("health/ready/", ops_views.health_ready, name="health_ready"),
+    path("api/network-info/", ops_views.network_info, name="network_info"),
+    path(
+        "api/fairplay-report/<int:game_id>/",
+        ops_views.fairplay_report,
+        name="fairplay_report",
     ),
 ]

@@ -1,80 +1,39 @@
-"""
-Run this in Django shell to test signature generation
-python manage.py shell < test_signature.py
+"""Manual signature debug helper.
+
+Run with:
+python manage.py shell -c "from main.test_signature import debug_latest_game_signature; debug_latest_game_signature()"
 """
 
-from main.blockchain_utils import (
-    w3,
-    chess_contract,
-    judge_account,
-    generate_winner_signature,
-)
-from main.models import Game
 from django.conf import settings
 
-print("=" * 60)
-print("SIGNATURE DEBUGGING")
-print("=" * 60)
+from main.blockchain_utils import (
+    generate_winner_signature,
+    get_chess_contract,
+    get_judge_account,
+)
+from main.models import Game
 
-# Get a completed game
-try:
-    game = Game.objects.filter(is_active=False, winner__isnull=False).latest("id")
-    print(f"\n✓ Found game #{game.id}")
-    print(f"  Winner: {game.winner.username}")
-    print(f"  Winner address: {game.winner.profile.ethereum_address}")
-except Game.DoesNotExist:
-    print("\n✗ No completed games found")
-    exit()
+__test__ = False
 
-print("\n" + "=" * 60)
-print("CONFIGURATION CHECK")
-print("=" * 60)
 
-# Check configuration
-print(f"\nContract Address: {settings.CHESS_CONTRACT_ADDRESS}")
-print(f"Judge Private Key: {settings.JUDGE_PRIVATE_KEY[:10]}...")
-print(f"RPC URL: {settings.BLOCKCHAIN_RPC_URL}")
+def debug_latest_game_signature():
+    game = Game.objects.filter(is_active=False, winner__isnull=False).order_by("-id").first()
+    if not game:
+        print("No completed games found.")
+        return
 
-# Get judge address from contract
-try:
-    contract_judge = chess_contract.functions.judge_address().call()
-    print(f"\nJudge in Contract: {contract_judge}")
-    print(f"Judge from .env:    {judge_account.address}")
+    contract = get_chess_contract()
+    judge = get_judge_account()
+    contract_judge = contract.functions.judge_address().call()
+    winner_address = game.winner.profile.ethereum_address
+    v, r, s = generate_winner_signature(game.id, winner_address)
 
-    if contract_judge.lower() == judge_account.address.lower():
-        print("✓ Judge addresses MATCH")
-    else:
-        print("✗ Judge addresses DO NOT MATCH!")
-        print("  This is the problem - contract expects different judge")
-except Exception as e:
-    print(f"✗ Could not get judge from contract: {e}")
-
-print("\n" + "=" * 60)
-print("SIGNATURE GENERATION TEST")
-print("=" * 60)
-
-# Generate signature
-winner_address = game.winner.profile.ethereum_address
-v, r, s = generate_winner_signature(game.id, winner_address)
-
-print(f"\nGenerated signature:")
-print(f"  v: {v}")
-print(f"  r: {r}")
-print(f"  s: {s}")
-
-print("\n" + "=" * 60)
-print("RECOMMENDATIONS")
-print("=" * 60)
-
-if contract_judge.lower() != judge_account.address.lower():
-    print("\n⚠️  PROBLEM FOUND:")
-    print("   The contract was deployed with a different judge address")
-    print("   than what's in your .env file!")
-    print("\n   SOLUTION:")
-    print(f"   1. Get the private key for address: {contract_judge}")
-    print("   2. Update .env JUDGE_PRIVATE_KEY with that key")
-    print("   OR")
-    print("   3. Redeploy the contract with current judge account")
-else:
-    print("\n✓ Configuration looks correct")
-    print("  Check Vyper contract signature verification logic")
+    print(f"Game ID: {game.id}")
+    print(f"Winner: {game.winner.username}")
+    print(f"Winner address: {winner_address}")
+    print(f"Contract address: {settings.CHESS_CONTRACT_ADDRESS}")
+    print(f"Judge in contract: {contract_judge}")
+    print(f"Judge in env: {judge.address}")
+    print(f"Signature v: {v}")
+    print(f"Signature r: {r}")
+    print(f"Signature s: {s}")

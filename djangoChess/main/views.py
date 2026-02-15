@@ -5,8 +5,8 @@ from django.db.models import Q
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth import login, authenticate
 from django.db import transaction
-from django.utils import timezone
 from django.contrib import messages
+from decimal import Decimal, InvalidOperation
 
 
 def signup(request):
@@ -41,7 +41,6 @@ def login_view(request):
 def game_detail(request, game_id):
     game = get_object_or_404(Game, id=game_id)
 
-    # Check if user is part of this game
     if request.user not in [game.white_player, game.black_player]:
         messages.error(request, "You are not part of this game.")
         return redirect("lobby")
@@ -53,17 +52,18 @@ def game_detail(request, game_id):
         "user_ethereum_address": request.user.profile.ethereum_address,
         "CHESS_CONTRACT_ADDRESS": settings.CHESS_CONTRACT_ADDRESS,
         "BLOCKCHAIN_RPC_URL": settings.BLOCKCHAIN_RPC_URL,
+        "BLOCKCHAIN_NETWORK": settings.BLOCKCHAIN_NETWORK,
+        "CHAIN_ID": settings.CHAIN_ID,
     }
     return render(request, "main/board2.html", context)
 
 
 @login_required
 def lobby(request):
-    # Only show public games in lobby
     open_games = Game.objects.filter(
         black_player__isnull=True,
         is_active=True,
-        is_private=False,  # NEW: Only public games
+        is_private=False,
     ).exclude(white_player=request.user)
 
     my_games = (
@@ -84,24 +84,21 @@ def lobby(request):
 
 @login_required
 def lobby_list_partial(request):
-    open_games = Game.objects.filter(black_player__isnull=True, is_active=True).exclude(
-        white_player=request.user
-    )
+    open_games = Game.objects.filter(
+        black_player__isnull=True, is_active=True, is_private=False
+    ).exclude(white_player=request.user)
     return render(request, "main/partials/game_list.html", {"open_games": open_games})
 
 
 @login_required
 def create_game(request):
-    """Create a new game with optional bet amount and privacy"""
-
-    # Check if user has Ethereum address set
+    """Create a new game with optional bet amount and privacy."""
     if not request.user.profile.ethereum_address:
         messages.warning(
             request, "Please set your Ethereum address in your profile first."
         )
         return redirect("set_ethereum_address")
 
-    # Check for existing open game by this user
     existing_game = Game.objects.filter(
         white_player=request.user, is_active=True, black_player__isnull=True
     ).first()
@@ -110,25 +107,24 @@ def create_game(request):
         return redirect("game_detail", game_id=existing_game.id)
 
     if request.method == "POST":
-        bet_amount = request.POST.get("bet_amount", "0")
+        raw_bet_amount = request.POST.get("bet_amount", "0").strip()
         is_private = request.POST.get("is_private") == "on"
 
         try:
-            bet_amount = float(bet_amount)
+            bet_amount = Decimal(raw_bet_amount or "0")
             if bet_amount < 0:
                 messages.error(request, "Bet amount cannot be negative.")
                 return redirect("create_game")
-        except ValueError:
-            bet_amount = 0
+        except InvalidOperation:
+            messages.error(request, "Invalid bet amount.")
+            return redirect("create_game")
 
-        # Generate private link code if private
         private_link_code = None
         if is_private:
             import secrets
 
             private_link_code = secrets.token_urlsafe(16)
 
-        # Create game with bet amount
         new_game = Game.objects.create(
             white_player=request.user,
             bet_amount=bet_amount,
@@ -144,9 +140,8 @@ def create_game(request):
             )
 
         if is_private:
-            # Show private link
             private_url = request.build_absolute_uri(
-                f"/join-private/{private_link_code}/"
+                f"/chess/join-private/{private_link_code}/"
             )
             messages.success(
                 request,
@@ -155,24 +150,21 @@ def create_game(request):
 
         return redirect("game_detail", game_id=new_game.id)
 
-    # GET request - show create game form
     return render(request, "main/create_game.html")
 
 
 @login_required
 def join_game(request, game_id):
-    """Join an existing game - shows confirmation page first"""
+    """Join an existing game."""
 
     game = get_object_or_404(Game, id=game_id)
 
-    # Check if user has Ethereum address set
     if not request.user.profile.ethereum_address:
         messages.warning(
             request, "Please set your Ethereum address in your profile first."
         )
         return redirect("set_ethereum_address")
 
-    # Validation checks
     if game.white_player == request.user:
         messages.error(request, "You cannot join your own game.")
         return redirect("lobby")
@@ -181,7 +173,6 @@ def join_game(request, game_id):
         messages.error(request, "This game is already full.")
         return redirect("lobby")
 
-    # GET request - show confirmation page
     if request.method == "GET":
         context = {
             "game": game,
@@ -191,17 +182,14 @@ def join_game(request, game_id):
         }
         return render(request, "main/join_game.html", context)
 
-    # POST request - actually join the game
     if request.method == "POST":
         with transaction.atomic():
             game = Game.objects.select_for_update().get(id=game_id)
 
-            # Double-check it's still available
             if game.black_player is not None:
                 messages.error(request, "Someone else just joined this game.")
                 return redirect("lobby")
 
-            # Join the game
             game.black_player = request.user
             game.save()
 
@@ -219,16 +207,14 @@ def join_game(request, game_id):
 
 @login_required
 def set_ethereum_address(request):
-    """Allow user to set their Ethereum address"""
+    """Allow user to set their Ethereum address."""
     if request.method == "POST":
         ethereum_address = request.POST.get("ethereum_address", "").strip()
 
-        # Basic validation
         if not ethereum_address.startswith("0x") or len(ethereum_address) != 42:
             messages.error(request, "Invalid Ethereum address format.")
             return render(request, "main/set_address.html")
 
-        # Check if address is already taken
         if (
             Profile.objects.filter(ethereum_address=ethereum_address)
             .exclude(user=request.user)
@@ -239,7 +225,6 @@ def set_ethereum_address(request):
             )
             return render(request, "main/set_address.html")
 
-        # Update profile
         profile = request.user.profile
         profile.ethereum_address = ethereum_address
         profile.save()
@@ -256,34 +241,41 @@ def set_ethereum_address(request):
 
 @login_required
 def join_private_game(request, link_code):
-    """Join a private game using the link code"""
+    """Join a private game using the link code."""
     try:
         game = Game.objects.get(private_link_code=link_code, is_private=True)
     except Game.DoesNotExist:
         messages.error(request, "Invalid or expired game link.")
         return redirect("lobby")
 
-    # Check if game is still available
     if game.black_player is not None:
         messages.error(request, "This game is already full.")
         return redirect("lobby")
 
     if game.white_player == request.user:
-        # Creator accessing their own game
         return redirect("game_detail", game_id=game.id)
 
-    # Redirect to normal join flow
     return redirect("join_game", game_id=game.id)
 
 
 @login_required
 def profile_view(request):
-    """View user profile"""
+    """View user profile."""
+    games_played = Game.objects.filter(
+        Q(white_player=request.user) | Q(black_player=request.user), is_active=False
+    ).count()
+    games_won = Game.objects.filter(winner=request.user).count()
+    win_rate = round((games_won / games_played) * 100, 1) if games_played else None
+
     context = {
         "profile": request.user.profile,
-        "games_won": Game.objects.filter(winner=request.user).count(),
-        "games_played": Game.objects.filter(
+        "games_won": games_won,
+        "games_played": games_played,
+        "win_rate": win_rate,
+        "game_history": Game.objects.filter(
             Q(white_player=request.user) | Q(black_player=request.user), is_active=False
-        ).count(),
+        )
+        .select_related("white_player", "black_player", "winner")
+        .order_by("-created_at")[:20],
     }
     return render(request, "main/profile.html", context)

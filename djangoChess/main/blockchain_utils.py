@@ -1,111 +1,106 @@
-"""
-Blockchain integration utilities for Chess dApp
-"""
+"""Blockchain utilities for signatures, contract state, and transaction verification."""
 
-from web3 import Web3
+from decimal import Decimal, InvalidOperation
+from functools import lru_cache
+import logging
+from typing import Optional
+
+import eth_abi
+from django.conf import settings
 from eth_account import Account
 from eth_account.messages import encode_defunct
-from django.conf import settings
-import json
-import eth_abi
+from web3 import Web3
 
-# Initialize Web3
-w3 = Web3(Web3.HTTPProvider(settings.BLOCKCHAIN_RPC_URL))
-
-# Load contract ABI from Moccasin compilation
 from .contract_loader import CONTRACT_ABI
 
-# Contract instance
-chess_contract = w3.eth.contract(
-    address=settings.CHESS_CONTRACT_ADDRESS, abi=CONTRACT_ABI
-)
+logger = logging.getLogger(__name__)
 
-# Judge account (loaded from settings)
-judge_account = Account.from_key(settings.JUDGE_PRIVATE_KEY)
+
+@lru_cache(maxsize=1)
+def get_web3():
+    if not settings.BLOCKCHAIN_RPC_URL:
+        raise ValueError("BLOCKCHAIN_RPC_URL not configured")
+
+    w3 = Web3(Web3.HTTPProvider(settings.BLOCKCHAIN_RPC_URL))
+    if not w3.is_connected():
+        raise ConnectionError(
+            f"Cannot connect to blockchain at {settings.BLOCKCHAIN_RPC_URL}"
+        )
+    if w3.eth.chain_id != settings.CHAIN_ID:
+        raise ValueError(
+            f"Chain ID mismatch: connected to {w3.eth.chain_id}, expected {settings.CHAIN_ID}"
+        )
+    return w3
+
+
+@lru_cache(maxsize=1)
+def get_chess_contract():
+    if not settings.CHESS_CONTRACT_ADDRESS:
+        raise ValueError("CHESS_CONTRACT_ADDRESS not set")
+    if not CONTRACT_ABI:
+        raise ValueError("Contract ABI not loaded")
+
+    w3 = get_web3()
+    address = w3.to_checksum_address(settings.CHESS_CONTRACT_ADDRESS)
+    code = w3.eth.get_code(address)
+    if code == b"" or code == b"0x":
+        raise ValueError(f"No contract found at {address}")
+    return w3.eth.contract(address=address, abi=CONTRACT_ABI)
+
+
+@lru_cache(maxsize=1)
+def get_judge_account():
+    key = settings.JUDGE_PRIVATE_KEY
+    if not key:
+        raise ValueError("JUDGE_PRIVATE_KEY not set")
+    if len(key) != 66 or not key.startswith("0x"):
+        raise ValueError("JUDGE_PRIVATE_KEY must be 66 chars (0x + 64 hex)")
+    return Account.from_key(key)
 
 
 def generate_winner_signature(game_id: int, winner_address: str) -> tuple:
+    w3 = get_web3()
+    judge = get_judge_account()
+    contract = get_chess_contract()
+
     winner_address = w3.to_checksum_address(winner_address)
-    contract_address = w3.to_checksum_address(settings.CHESS_CONTRACT_ADDRESS)
-
-    print(f"Generating signature for Game {game_id}")
-
-    # This matches Vyper's: convert(game_id, bytes32), convert(winner, bytes32), convert(self, bytes32)
+    contract_address = w3.to_checksum_address(contract.address)
     encoded_data = eth_abi.encode(
         ["uint256", "address", "address"], [game_id, winner_address, contract_address]
     )
-
     data_hash = w3.keccak(encoded_data)
-    print(f"  Data hash: {data_hash.hex()}")
-
     message = encode_defunct(primitive=data_hash)
+    signed = w3.eth.account.sign_message(message, private_key=settings.JUDGE_PRIVATE_KEY)
 
-    signed_message = w3.eth.account.sign_message(
-        message, private_key=settings.JUDGE_PRIVATE_KEY
-    )
+    recovered = w3.eth.account.recover_message(message, vrs=(signed.v, signed.r, signed.s))
+    if recovered.lower() != judge.address.lower():
+        raise ValueError("Generated signature does not recover to judge")
 
-    v = signed_message.v
-    r_hex = w3.to_hex(signed_message.r)
-    s_hex = w3.to_hex(signed_message.s)
-
-    print(f"  Signature v: {v}")
-    print(
-        f"  Recovered: {w3.eth.account.recover_message(message, vrs=(v, signed_message.r, signed_message.s))}"
-    )
-
-    return (v, r_hex, s_hex)
+    return signed.v, w3.to_hex(signed.r), w3.to_hex(signed.s)
 
 
 def generate_draw_signature(game_id: int) -> tuple:
-    """
-    Generate signature for draw settlement.
-    Matches Vyper's: convert(game_id, bytes32), convert("DRAW", Bytes[4]), convert(self, bytes32)
-    """
-    contract_address = w3.to_checksum_address(settings.CHESS_CONTRACT_ADDRESS)
+    w3 = get_web3()
+    judge = get_judge_account()
+    contract = get_chess_contract()
 
-    # Convert "DRAW" to bytes (Vyper uses Bytes[4])
-    draw_bytes = b"DRAW"  # This is exactly 4 bytes
-
-    # Match Vyper's concat(convert(game_id, bytes32), convert("DRAW", Bytes[4]), convert(self, bytes32))
-    # We need to manually build this since eth_abi doesn't have a "Bytes[4]" type
-
-    # Convert game_id to bytes32 (left-padded)
     game_id_bytes = game_id.to_bytes(32, byteorder="big")
-
-    # "DRAW" is just the raw bytes
-    # draw_bytes is already b"DRAW"
-
-    # Convert contract address to bytes32 (left-padded with 12 zero bytes)
-    contract_bytes = bytes.fromhex(contract_address[2:].zfill(64))
-
-    # Concatenate: game_id (32 bytes) + "DRAW" (4 bytes) + contract (32 bytes)
-    concatenated = game_id_bytes + draw_bytes + contract_bytes
-
-    # Hash the concatenated data
-    data_hash = w3.keccak(concatenated)
-
-    # Wrap with Ethereum Signed Message
+    draw_bytes = b"DRAW"
+    contract_bytes = bytes.fromhex(contract.address[2:].zfill(64))
+    data_hash = w3.keccak(game_id_bytes + draw_bytes + contract_bytes)
     message = encode_defunct(primitive=data_hash)
+    signed = w3.eth.account.sign_message(message, private_key=settings.JUDGE_PRIVATE_KEY)
 
-    signed_message = w3.eth.account.sign_message(
-        message, private_key=settings.JUDGE_PRIVATE_KEY
-    )
+    recovered = w3.eth.account.recover_message(message, vrs=(signed.v, signed.r, signed.s))
+    if recovered.lower() != judge.address.lower():
+        raise ValueError("Generated draw signature does not recover to judge")
 
-    return (signed_message.v, w3.to_hex(signed_message.r), w3.to_hex(signed_message.s))
+    return signed.v, w3.to_hex(signed.r), w3.to_hex(signed.s)
 
 
-def get_challenge_details(game_id: int) -> dict:
-    """
-    Fetch challenge details from smart contract.
-
-    Args:
-        game_id: The game ID
-
-    Returns:
-        dict: Challenge details
-    """
+def get_challenge_details(game_id: int) -> Optional[dict]:
     try:
-        challenge = chess_contract.functions.get_challenge(game_id).call()
+        challenge = get_chess_contract().functions.get_challenge(game_id).call()
         return {
             "player_white": challenge[0],
             "player_black": challenge[1],
@@ -113,83 +108,117 @@ def get_challenge_details(game_id: int) -> dict:
             "is_active": challenge[3],
             "is_completed": challenge[4],
         }
-    except Exception as e:
-        print(f"Error fetching challenge: {e}")
+    except Exception as exc:
+        logger.error("Error fetching challenge %s: %s", game_id, exc)
         return None
 
 
-def verify_deposit_transaction(
-    tx_hash: str, game_id: int, expected_amount: int
-) -> bool:
-    """
-    Verify a deposit transaction was successful.
-
-    Args:
-        tx_hash: Transaction hash
-        game_id: Game ID
-        expected_amount: Expected deposit amount in wei
-
-    Returns:
-        bool: True if transaction is valid
-    """
+def verify_deposit_transaction(tx_hash: str, game_id: int, expected_amount: int) -> bool:
+    w3 = get_web3()
+    contract = get_chess_contract()
     try:
         receipt = w3.eth.get_transaction_receipt(tx_hash)
-
-        # Check transaction succeeded
         if receipt["status"] != 1:
             return False
 
-        # Check it was sent to our contract
-        if receipt["to"].lower() != settings.CHESS_CONTRACT_ADDRESS.lower():
-            return False
-
-        # Verify amount and function called
         tx = w3.eth.get_transaction(tx_hash)
+        if tx.get("to", "").lower() != contract.address.lower():
+            return False
         if tx["value"] != expected_amount:
             return False
 
-        # Decode function call to verify it's deposit(game_id)
-        # This requires the ABI - simplified check here
-        return True
+        fn, params = contract.decode_function_input(tx["input"])
+        return fn.fn_name == "deposit" and int(params.get("game_id", -1)) == int(game_id)
+    except Exception as exc:
+        logger.error("Error verifying transaction %s: %s", tx_hash, exc)
+        return False
 
-    except Exception as e:
-        print(f"Error verifying transaction: {e}")
+
+def verify_payout_transaction(tx_hash: str, game_id: int, game) -> bool:
+    w3 = get_web3()
+    contract = get_chess_contract()
+    try:
+        receipt = w3.eth.get_transaction_receipt(tx_hash)
+        if receipt["status"] != 1:
+            return False
+
+        tx = w3.eth.get_transaction(tx_hash)
+        if tx.get("to", "").lower() != contract.address.lower():
+            return False
+
+        fn, params = contract.decode_function_input(tx["input"])
+        fn_name = fn.fn_name
+        if fn_name not in {"claim_winnings", "settle_draw"}:
+            return False
+        if int(params.get("game_id", -1)) != int(game_id):
+            return False
+
+        tx_from = tx["from"].lower()
+        white_addr = (getattr(game.white_player.profile, "ethereum_address", "") or "").lower()
+        black_addr = (getattr(game.black_player.profile, "ethereum_address", "") or "").lower()
+
+        if fn_name == "claim_winnings":
+            if not game.winner or not game.winner.profile.ethereum_address:
+                return False
+            winner_addr = game.winner.profile.ethereum_address.lower()
+            claim_winner = params.get("winner", "").lower()
+            return winner_addr == claim_winner and tx_from == winner_addr
+
+        return tx_from in {white_addr, black_addr}
+    except Exception as exc:
+        logger.error("Error verifying payout tx %s: %s", tx_hash, exc)
         return False
 
 
 def estimate_claim_gas(game_id: int, winner_address: str) -> int:
-    """
-    Estimate gas for claim_winnings transaction.
-
-    Args:
-        game_id: Game ID
-        winner_address: Winner's address
-
-    Returns:
-        int: Estimated gas
-    """
+    w3 = get_web3()
+    contract = get_chess_contract()
     winner_address = w3.to_checksum_address(winner_address)
-    v, r, s = generate_winner_signature(game_id, winner_address)
-
     try:
-        gas_estimate = chess_contract.functions.claim_winnings(
+        v, r, s = generate_winner_signature(game_id, winner_address)
+        gas = contract.functions.claim_winnings(
             game_id, winner_address, v, r, s
         ).estimate_gas({"from": winner_address})
-
-        # Add 20% buffer
-        return int(gas_estimate * 1.2)
-    except Exception as e:
-        print(f"Error estimating gas: {e}")
-        return 200000  # Default fallback
+        return int(gas * 1.2)
+    except Exception as exc:
+        logger.error("Error estimating gas for game %s: %s", game_id, exc)
+        return 300000
 
 
-# Helper to convert ETH to Wei
-def eth_to_wei(eth_amount: float) -> int:
-    """Convert ETH to Wei"""
-    return w3.to_wei(eth_amount, "ether")
+def eth_to_wei(eth_amount) -> int:
+    w3 = get_web3()
+    try:
+        amount = Decimal(str(eth_amount))
+    except (InvalidOperation, TypeError, ValueError) as exc:
+        raise ValueError(f"Invalid ETH amount: {eth_amount}") from exc
+    return w3.to_wei(amount, "ether")
 
 
-# Helper to convert Wei to ETH
 def wei_to_eth(wei_amount: int) -> float:
-    """Convert Wei to ETH"""
-    return w3.from_wei(wei_amount, "ether")
+    return get_web3().from_wei(wei_amount, "ether")
+
+
+def get_network_info() -> dict:
+    try:
+        w3 = get_web3()
+        contract = get_chess_contract()
+        judge = get_judge_account()
+        return {
+            "success": True,
+            "network": settings.BLOCKCHAIN_NETWORK,
+            "network_name": settings.CURRENT_NETWORK_CONFIG["name"],
+            "rpc_url": settings.BLOCKCHAIN_RPC_URL,
+            "chain_id": w3.eth.chain_id,
+            "contract_address": contract.address,
+            "judge_address": judge.address,
+            "is_connected": w3.is_connected(),
+            "latest_block": w3.eth.block_number,
+            "explorer_url": settings.CURRENT_NETWORK_CONFIG.get("explorer_url"),
+        }
+    except Exception as exc:
+        logger.error("Error getting network info: %s", exc)
+        return {
+            "success": False,
+            "error": str(exc),
+            "network": settings.BLOCKCHAIN_NETWORK,
+        }

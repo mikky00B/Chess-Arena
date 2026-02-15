@@ -89,7 +89,7 @@
                              <li class="list-group-item d-flex justify-content-between align-items-center">
                                 <span><i class="bi bi-pie-chart me-2 text-muted"></i>Win Rate</span>
                                 <span class="fs-4 fw-bold text-info">
-                                    {% if games_played > 0 %}{{ games_won|floatformat:0 }}%{% else %}N/A{% endif %}
+                                    {% if win_rate is not None %}{{ win_rate }}%{% else %}N/A{% endif %}
                                 </span>
                             </li>
                              <li class="list-group-item pt-3">
