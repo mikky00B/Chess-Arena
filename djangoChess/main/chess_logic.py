@@ -10,14 +10,11 @@ class ChessGame:
 
     def make_move(self, move_str):
         try:
-            # 1. Try UCI (e7e8q)
-            # chessboard.js sends source+target. If we added 'q', it's 5 chars.
             move = chess.Move.from_uci(move_str)
             if move in self.board.legal_moves:
                 self.board.push(move)
                 return True
 
-            # 2. Try SAN Fallback (only if UCI fails)
             move = self.board.parse_san(move_str)
             if move in self.board.legal_moves:
                 self.board.push(move)

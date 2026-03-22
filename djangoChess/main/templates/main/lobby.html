@@ -67,6 +67,7 @@
 <body class="py-5">
 
     <div class="container">
+        {% include "main/partials/flash_messages.html" %}
         
         <!-- Header -->
         <header class="d-flex flex-column flex-md-row justify-content-between align-items-center pb-4 mb-4 border-bottom border-secondary">
@@ -76,6 +77,9 @@
             </div>
             <a href="{% url 'create_game' %}" class="btn btn-primary btn-lg mt-3 mt-md-0">
                 <i class="bi bi-plus-circle me-2"></i> Create New Game
+            </a>
+            <a href="{% url 'tournament_create_page' %}" class="btn btn-outline-light btn-lg mt-3 mt-md-0 ms-md-2">
+                <i class="bi bi-diagram-3 me-2"></i> Create Tournament
             </a>
         </header>
 
@@ -136,6 +140,36 @@
                     </div>
                 </div>
 
+                <div class="card mt-4">
+                    <div class="card-header fs-5 fw-light border-0">
+                        <i class="bi bi-diagram-3 me-2"></i> Tournaments
+                    </div>
+                    <div class="card-body">
+                        <h6 class="text-muted">My Tournaments</h6>
+                        <ul class="list-group list-group-flush mb-3">
+                            {% for tournament in my_tournaments %}
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <a class="text-decoration-none" href="{% url 'tournament_detail_page' tournament.id %}">{{ tournament.name }}</a>
+                                    <span class="badge bg-secondary">{{ tournament.status }}</span>
+                                </li>
+                            {% empty %}
+                                <li class="list-group-item text-muted">No tournaments yet.</li>
+                            {% endfor %}
+                        </ul>
+                        <h6 class="text-muted">Open Tournaments</h6>
+                        <ul class="list-group list-group-flush">
+                            {% for tournament in open_tournaments %}
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <a class="text-decoration-none" href="{% url 'tournament_detail_page' tournament.id %}">{{ tournament.name }}</a>
+                                    <span class="badge bg-info text-dark">{{ tournament.format }}</span>
+                                </li>
+                            {% empty %}
+                                <li class="list-group-item text-muted">No open tournaments right now.</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+
             </div>
 
             <!-- Sidebar: User Info & Leaderboard -->
@@ -169,6 +203,30 @@
                                 <li class="list-group-item text-center text-muted">No rankings yet.</li>
                             {% endfor %}
                         </ul>
+                    </div>
+                </div>
+
+                <div class="card mt-4">
+                    <div class="card-header fs-5 fw-light border-0">
+                        <i class="bi bi-lightbulb me-2"></i> Daily Puzzle
+                    </div>
+                    <div class="card-body">
+                        {% if daily_puzzle %}
+                            <p class="mb-2 fw-semibold">{{ daily_puzzle.title }}</p>
+                            {% if daily_puzzle.image %}
+                                <img src="{{ daily_puzzle.image }}" alt="Daily puzzle" class="img-fluid rounded mb-2">
+                            {% endif %}
+                            {% if daily_puzzle.fen %}
+                                <small class="text-muted d-block mb-2">FEN: {{ daily_puzzle.fen }}</small>
+                            {% endif %}
+                            <a href="{% url 'daily_puzzle_page' %}" class="btn btn-sm btn-outline-light">Solve on our platform</a>
+                            {% if daily_puzzle.url %}
+                                <a href="{{ daily_puzzle.url }}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-secondary ms-2">Open on Chess.com</a>
+                            {% endif %}
+                        {% else %}
+                            <p class="text-muted mb-0">{{ daily_puzzle_error|default:"Daily puzzle unavailable." }}</p>
+                            <a href="{% url 'daily_puzzle_page' %}" class="btn btn-sm btn-outline-light mt-2">Open puzzle page</a>
+                        {% endif %}
                     </div>
                 </div>
 

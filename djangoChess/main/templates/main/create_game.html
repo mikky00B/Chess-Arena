@@ -1,114 +1,131 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-bs-theme="dark">
 <head>
     <meta charset="UTF-8">
-    <title>Create Game | Chess dApp</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Game | Chess Platform</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Lexend', sans-serif;
+            background-color: #1a1a1a;
+            background-image: radial-gradient(circle at 1px 1px, #444 1px, transparent 0);
+            background-size: 20px 20px;
+            color: #f8f9fa;
+        }
+        .card {
+            background: rgba(40, 40, 40, 0.6);
+            border-radius: 16px;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .btn-primary {
+            background-color: #6a4bff;
+            border-color: #6a4bff;
+        }
+        .btn-primary:hover {
+            background-color: #583acc;
+            border-color: #583acc;
+        }
+    </style>
 </head>
-<body class="bg-gray-900 text-gray-100 min-h-screen font-sans">
+<body class="py-5">
 
-    <nav class="border-b border-gray-800 p-4 bg-gray-900">
-        <div class="container mx-auto flex justify-between items-center">
-            <h1 class="text-2xl font-black tracking-tighter text-blue-500">
-                <a href="{% url 'lobby' %}">CHESS<span class="text-white">DAPP</span></a>
-            </h1>
-            <div class="flex items-center gap-4">
-                <span class="text-sm">{{ request.user.username }}</span>
+    <div class="container">
+        <header class="d-flex flex-column flex-md-row justify-content-between align-items-center pb-4 mb-4 border-bottom border-secondary">
+            <div>
+                <h1 class="fw-light"><i class="bi bi-plus-square me-2"></i> Create Challenge</h1>
+                <span class="text-muted">Set your game stakes and invite an opponent.</span>
+            </div>
+            <a href="{% url 'lobby' %}" class="btn btn-outline-light mt-3 mt-md-0">
+                <i class="bi bi-arrow-left me-2"></i> Back to Lobby
+            </a>
+        </header>
+
+        {% include "main/partials/flash_messages.html" %}
+
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <div class="card p-4 p-md-5">
+                    <form method="POST" id="createGameForm" class="d-flex flex-column gap-4">
+                        {% csrf_token %}
+
+                        <div>
+                            <label for="bet_amount" class="form-label fw-semibold">Bet Amount (ETH)</label>
+                            <input
+                                id="bet_amount"
+                                type="number"
+                                name="bet_amount"
+                                step="0.001"
+                                min="0"
+                                value="0"
+                                class="form-control bg-dark text-light border-secondary"
+                                placeholder="0.00"
+                            >
+                            <div class="form-text text-muted">Set to 0 for a free game, or enter an amount for escrow play.</div>
+                        </div>
+
+                        <div class="p-3 rounded border border-secondary-subtle bg-dark bg-opacity-50">
+                            <div class="form-check">
+                                <input
+                                    id="is_private"
+                                    class="form-check-input"
+                                    type="checkbox"
+                                    name="is_private"
+                                    onchange="togglePrivateInfo(this.checked)"
+                                >
+                                <label class="form-check-label fw-semibold" for="is_private">
+                                    <i class="bi bi-lock me-2"></i>Make this a private game
+                                </label>
+                            </div>
+                            <div class="form-text text-muted ms-4">Private games do not appear in lobby listings.</div>
+                        </div>
+
+                        <div id="privateInfo" class="d-none p-3 rounded border border-info-subtle bg-info bg-opacity-10">
+                            <p class="text-info fw-semibold mb-2"><i class="bi bi-link-45deg me-2"></i>Private Game Mode</p>
+                            <ul class="mb-0 text-muted">
+                                <li>Your game stays hidden from public lobby lists.</li>
+                                <li>You get a unique invite link to share.</li>
+                                <li>Only users with that link can join.</li>
+                            </ul>
+                        </div>
+
+                        <div class="p-3 rounded border border-warning-subtle bg-warning bg-opacity-10">
+                            <p class="text-warning fw-semibold mb-2"><i class="bi bi-exclamation-triangle me-2"></i>Important</p>
+                            <ul class="mb-0 text-muted">
+                                <li>Bet games require on-chain deposits from both players.</li>
+                                <li>Winner receives the combined pot.</li>
+                                <li>Draws are refunded on-chain.</li>
+                            </ul>
+                        </div>
+
+                        <div class="d-flex gap-3">
+                            <button type="submit" class="btn btn-primary w-100 fw-semibold">
+                                <i class="bi bi-check2-circle me-2"></i>Create Game
+                            </button>
+                            <a href="{% url 'lobby' %}" class="btn btn-outline-secondary w-100 fw-semibold">
+                                Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
-    </nav>
-
-    <main class="container mx-auto py-12 px-4 max-w-2xl">
-        <div class="bg-gray-800 rounded-2xl border border-gray-700 p-8 shadow-xl">
-            <h2 class="text-3xl font-bold mb-6">Create New Game</h2>
-            
-            {% if messages %}
-                {% for message in messages %}
-                <div class="mb-4 p-4 rounded-lg {% if message.tags == 'error' %}bg-red-900/20 border border-red-600 text-red-400{% else %}bg-blue-900/20 border border-blue-600 text-blue-400{% endif %}">
-                    {{ message }}
-                </div>
-                {% endfor %}
-            {% endif %}
-
-            <form method="POST" class="space-y-6" id="createGameForm">
-                {% csrf_token %}
-                
-                <div>
-                    <label class="block text-sm font-bold mb-2">Bet Amount (ETH)</label>
-                    <input 
-                        type="number" 
-                        name="bet_amount" 
-                        step="0.001"
-                        min="0"
-                        value="0"
-                        class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 focus:outline-none focus:border-blue-500"
-                        placeholder="0.00"
-                    >
-                    <p class="text-xs text-gray-400 mt-2">
-                        Set to 0 for a free game, or enter an amount to play for real ETH.
-                    </p>
-                </div>
-
-                <div class="bg-gray-900/50 rounded-lg p-4">
-                    <label class="flex items-center cursor-pointer">
-                        <input 
-                            type="checkbox" 
-                            name="is_private" 
-                            class="w-5 h-5 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500"
-                            onchange="togglePrivateInfo(this.checked)"
-                        >
-                        <span class="ml-3 text-sm font-bold">🔒 Make this a private game</span>
-                    </label>
-                    <p class="text-xs text-gray-400 mt-2 ml-8">
-                        Private games won't appear in the public lobby. You'll get a unique link to share with your opponent.
-                    </p>
-                </div>
-
-                <div id="privateInfo" class="hidden bg-blue-900/20 border border-blue-600 rounded-lg p-4 text-sm">
-                    <p class="text-blue-400 font-bold mb-2">🔗 Private Game Mode</p>
-                    <ul class="text-gray-300 space-y-1 ml-4">
-                        <li>• Your game won't appear in the public lobby</li>
-                        <li>• You'll receive a unique link to share</li>
-                        <li>• Only players with the link can join</li>
-                        <li>• Perfect for playing with specific friends</li>
-                    </ul>
-                </div>
-
-                <div class="bg-gray-900/50 rounded-lg p-4 text-sm space-y-2">
-                    <p class="text-yellow-400 font-bold">⚠️ Important:</p>
-                    <ul class="text-gray-400 space-y-1 ml-4">
-                        <li>• If you set a bet amount, you must deposit ETH to the smart contract</li>
-                        <li>• Your opponent must match your bet to start the game</li>
-                        <li>• Winner takes the entire pot (both deposits)</li>
-                        <li>• In case of a draw, both players get refunded</li>
-                    </ul>
-                </div>
-
-                <div class="flex gap-4">
-                    <button 
-                        type="submit" 
-                        class="flex-1 bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl font-bold transition-all"
-                    >
-                        Create Game
-                    </button>
-                    <a 
-                        href="{% url 'lobby' %}" 
-                        class="flex-1 bg-gray-700 hover:bg-gray-600 text-white px-6 py-3 rounded-xl font-bold text-center transition-all"
-                    >
-                        Cancel
-                    </a>
-                </div>
-            </form>
-        </div>
-    </main>
+    </div>
 
     <script>
         function togglePrivateInfo(isPrivate) {
             const privateInfo = document.getElementById('privateInfo');
             if (isPrivate) {
-                privateInfo.classList.remove('hidden');
+                privateInfo.classList.remove('d-none');
             } else {
-                privateInfo.classList.add('hidden');
+                privateInfo.classList.add('d-none');
             }
         }
     </script>

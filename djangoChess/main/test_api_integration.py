@@ -2,6 +2,7 @@ from decimal import Decimal
 
 import pytest
 from django.contrib.auth.models import User
+from web3 import Web3
 
 from main.models import Game, SecurityEvent
 
@@ -105,3 +106,20 @@ def test_health_endpoints(client):
     assert live.status_code == 200
     ready = client.get("/chess/health/ready/")
     assert ready.status_code in (200, 503)
+
+
+@pytest.mark.django_db
+def test_update_address_normalizes_to_checksum(client, users):
+    white, _, _ = users
+    assert client.login(username="white_api", password="pw")
+
+    lower_addr = "0x742d35cc6634c0532925a3b844bc9e7595f0beb4"
+    response = client.post(
+        "/chess/api/update-address/",
+        data=f'{{"ethereum_address":"{lower_addr}"}}',
+        content_type="application/json",
+    )
+    assert response.status_code == 200
+
+    white.profile.refresh_from_db()
+    assert white.profile.ethereum_address == Web3.to_checksum_address(lower_addr)

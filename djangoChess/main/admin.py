@@ -1,5 +1,16 @@
 from django.contrib import admin
-from .models import Profile, Game, Move, SecurityEvent
+from .models import (
+    Profile,
+    Game,
+    Move,
+    SecurityEvent,
+    Tournament,
+    TournamentParticipant,
+    TournamentInvite,
+    TournamentMatch,
+    TournamentReviewDecision,
+    TournamentPayout,
+)
 
 
 @admin.register(Profile)
@@ -149,3 +160,54 @@ class SecurityEventAdmin(admin.ModelAdmin):
     search_fields = ("event_type", "status", "user__username", "game__id")
     ordering = ("-created_at",)
     readonly_fields = ("created_at",)
+
+
+@admin.register(Tournament)
+class TournamentAdmin(admin.ModelAdmin):
+    list_display = ("id", "name", "creator", "format", "status", "entry_fee_eth", "created_at")
+    list_filter = ("status", "format", "invite_only", "review_required")
+    search_fields = ("name", "creator__username")
+    ordering = ("-created_at",)
+
+
+@admin.register(TournamentParticipant)
+class TournamentParticipantAdmin(admin.ModelAdmin):
+    list_display = ("tournament", "user", "status", "deposit_verified", "points")
+    list_filter = ("status", "deposit_verified")
+    search_fields = ("tournament__name", "user__username")
+
+
+@admin.register(TournamentInvite)
+class TournamentInviteAdmin(admin.ModelAdmin):
+    list_display = ("tournament", "invitee", "status", "expires_at", "created_at")
+    list_filter = ("status",)
+    search_fields = ("tournament__name", "invitee__username", "token")
+
+
+@admin.register(TournamentMatch)
+class TournamentMatchAdmin(admin.ModelAdmin):
+    list_display = (
+        "tournament",
+        "round_number",
+        "board_number",
+        "game_index",
+        "status",
+        "result",
+        "suspicion_score",
+    )
+    list_filter = ("status", "review_status", "requires_manual_review")
+    search_fields = ("tournament__name",)
+
+
+@admin.register(TournamentReviewDecision)
+class TournamentReviewDecisionAdmin(admin.ModelAdmin):
+    list_display = ("tournament", "scope", "decision", "reviewer", "finalized_at")
+    list_filter = ("scope", "decision")
+    search_fields = ("tournament__name", "reviewer__username")
+
+
+@admin.register(TournamentPayout)
+class TournamentPayoutAdmin(admin.ModelAdmin):
+    list_display = ("tournament", "rank", "participant", "gross_amount", "net_amount", "status")
+    list_filter = ("status",)
+    search_fields = ("tournament__name", "participant__user__username")

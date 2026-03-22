@@ -22,6 +22,7 @@ This file explains the full system from UI to settlement.
   - `djangoChess/main/urls.py`
 - Core views:
   - `views.py`: auth, lobby, game creation/join, profile.
+  - `tournament_views.py`: tournament create/invite/respond/lock/start/report/review/finalize APIs.
   - `blockchain_views.py`: contract ABI, deposit verification, signature retrieval, payout marking.
   - `ops_views.py`: health checks, network info, fair-play report.
 
@@ -56,6 +57,10 @@ This file explains the full system from UI to settlement.
   - `Game`: players, state, clocks, bet/payout metadata, signatures.
   - `Move`: SAN + sequence + think time.
   - `SecurityEvent`: audit trail for sensitive flows.
+  - `Tournament`: lifecycle and rules for tournament-first escrow.
+  - `TournamentParticipant`, `TournamentInvite`: roster and invite workflow.
+  - `TournamentMatch`: generated pairings and review metadata.
+  - `TournamentReviewDecision`, `TournamentPayout`: review outcomes and payout ledger.
 - Migrations in `djangoChess/main/migrations/`.
 
 ## 8. Signature & Settlement Layer
@@ -83,6 +88,17 @@ This file explains the full system from UI to settlement.
   - `/chess/api/network-info/`
 - Fair-play report:
   - `/chess/api/fairplay-report/<game_id>/`
+
+## 14. Tournament + Review Layer (New)
+1. Creator initializes tournament and configures format/rules.
+2. Invitees accept and check in, then creator locks roster.
+3. Format engine in `tournament_formats.py` generates match plan.
+4. `tournament_service.py` applies match scoring and review pass.
+5. Finalization in service computes payout rows and flips tournament to `finalized`.
+
+## 15. Daily Puzzle Integration (New)
+- Lobby fetches `https://api.chess.com/pub/puzzle` server-side.
+- Response is cached briefly in-process with timeout and graceful fallback.
 
 ## 11. Testing Layer
 - Pytest configuration: `pytest.ini`

@@ -1,26 +1,121 @@
+# Moccasin Configuration for Chess dApp
+
 [project]
 src = "src"
 out = "out"
 dot_env = ".env"
 
+# ==========================================
+# DEVELOPMENT NETWORKS
+# ==========================================
+
 [networks.pyevm]
+# Python EVM for unit testing
 is_zksync = false
 
 [networks.anvil]
+# Local Anvil testnet
 url = "http://127.0.0.1:8545"
 chain_id = 31337
 prompt_live = false
 save_to_db = false
-default_account_name = "anvil4"
+default_account_name = "judge"
+
+# ==========================================
+# TESTNET NETWORKS
+# ==========================================
+
+[networks.base-sepolia]
+# Base Sepolia Testnet
+url = "https://sepolia.base.org"
+chain_id = 84532
+prompt_live = true
+save_to_db = true
+default_account_name = "deployer_sepolia"
+
+# Optional: Use Alchemy for better reliability
+# url = "${ALCHEMY_BASE_SEPOLIA_URL}"  # Set in .env as ALCHEMY_BASE_SEPOLIA_URL=https://base-sepolia.g.alchemy.com/v2/YOUR_KEY
+
+[networks.base-sepolia.explorer]
+# BaseScan for Sepolia
+url = "https://sepolia.basescan.org"
+api_key = "${BASESCAN_API_KEY}"  # Optional, for contract verification
+
+# ==========================================
+# MAINNET NETWORKS
+# ==========================================
+
+[networks.base]
+# Base Mainnet - PRODUCTION
+url = "https://mainnet.base.org"
+chain_id = 8453
+prompt_live = true  # Always prompt before sending real transactions
+save_to_db = true
+default_account_name = "deployer_production"
+
+# Optional: Use Alchemy/Infura for production
+# url = "${ALCHEMY_BASE_MAINNET_URL}"  # Set in .env
+
+[networks.base.explorer]
+# BaseScan for Mainnet
+url = "https://basescan.org"
+api_key = "${BASESCAN_API_KEY}"  # Optional, for contract verification
+
+# ==========================================
+# OTHER TESTNETS (for reference)
+# ==========================================
 
 [networks.sepolia]
+# Ethereum Sepolia
 url = "https://ethereum-sepolia-rpc.publicnode.com"
 chain_id = 11155111
+prompt_live = true
 
 [networks.zksync-sepolia]
+# zkSync Sepolia (if needed later)
 url = "https://sepolia.era.zksync.dev"
 chain_id = 300
 is_zksync = true
 prompt_live = true
 
-# You can view all configuration options at https://cyfrin.github.io/moccasin/all_moccasin_toml_parameters.html
+# ==========================================
+# ACCOUNT CONFIGURATION
+# ==========================================
+# Moccasin will prompt for private keys when deploying
+# OR you can set them as environment variables:
+#
+# For Anvil (local):
+#   - Uses default Anvil accounts automatically
+#
+# For Testnets/Mainnet:
+#   - Set DEPLOYER_PRIVATE_KEY in .env
+#   - Moccasin will use this if default_account_name is set
+#
+# NEVER commit private keys to this file!
+
+# ==========================================
+# COMPILER SETTINGS
+# ==========================================
+[compiler]
+evm_version = "cancun"  # Use latest EVM version
+
+# ==========================================
+# NOTES
+# ==========================================
+# To use this configuration:
+#
+# 1. Local Development:
+#    moccasin compile
+#    moccasin run deploy --network anvil
+#
+# 2. Base Sepolia (Testnet):
+#    moccasin run deploy --network base-sepolia
+#
+# 3. Base Mainnet (Production):
+#    moccasin run deploy --network base
+#
+# 4. Verify contract on BaseScan:
+#    moccasin verify --network base
+#
+# View all config options at:
+# https://cyfrin.github.io/moccasin/all_moccasin_toml_parameters.html

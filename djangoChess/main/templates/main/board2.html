@@ -2,11 +2,24 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chess Match #{{ game.id }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
     <style>
+        body {
+            font-family: 'Lexend', sans-serif;
+            background-color: #1a1a1a;
+            background-image: radial-gradient(circle at 1px 1px, #444 1px, transparent 0);
+            background-size: 20px 20px;
+            color: #f8f9fa;
+        }
         [x-cloak] { display: none !important; }
         .modal-overlay { z-index: 9999 !important; }
         .timer-active {
@@ -37,7 +50,7 @@
         .confetti { animation: confetti 3s ease-out forwards; }
     </style>
 </head>
-<body class="bg-gray-900 text-gray-100 min-h-screen font-sans" x-data="chessGame()" x-init="initBoard()">
+<body class="py-5" x-data="chessGame()" x-init="initBoard()">
 
     <!-- Game End Modal -->
     <div x-show="gameEndModal.show" class="modal-overlay fixed inset-0 bg-black/90 flex items-center justify-center z-50" x-cloak>
@@ -108,7 +121,18 @@
         </div>
     </div>
 
-    <div class="container mx-auto py-8 px-4">
+    <div class="container mx-auto px-4">
+        <header class="d-flex flex-column flex-md-row justify-content-between align-items-center pb-4 mb-4 border-bottom border-secondary">
+            <div>
+                <h1 class="fw-light"><i class="bi bi-controller me-2"></i> Chess Match #{{ game.id }}</h1>
+                <span class="text-muted">Live game board with on-chain settlement tools.</span>
+            </div>
+            <a href="{% url 'lobby' %}" class="btn btn-outline-light mt-3 mt-md-0">
+                <i class="bi bi-arrow-left me-2"></i> Back to Lobby
+            </a>
+        </header>
+
+        {% include "main/partials/flash_messages.html" %}
         
         <!-- Deposit Status Banner -->
         {% if game.bet_amount > 0 %}
@@ -130,6 +154,7 @@
                     <div class="flex gap-3 flex-wrap">
                         <button 
                             onclick="ChessWeb3.deposit()" 
+                            id="deposit-btn"
                             class="bg-yellow-600 hover:bg-yellow-500 px-4 py-2 rounded-lg text-sm font-bold transition-all"
                         >
                             💸 Deposit {{ game.bet_amount }} ETH
@@ -326,8 +351,11 @@
                     });
 
                     this.socket.onmessage = (e) => this.handleSocketMessage(JSON.parse(e.data));
-                    this.socket.onopen = () => this.statusMsg = "Live";
-                    
+                    this.socket.onopen = () => {
+                        this.statusMsg = "Live";
+                        this.requestStateSync();
+                    };
+                     
                     setInterval(() => {
                         if (!this.isGameOver && this.gameStarted) {
                             if (this.activeTurn === 'white' && this.whiteTime > 0) {
@@ -337,6 +365,12 @@
                             }
                         }
                     }, 100);
+
+                    setInterval(() => {
+                        if (!this.isGameOver && this.socket && this.socket.readyState === WebSocket.OPEN) {
+                            this.requestStateSync();
+                        }
+                    }, 2000);
                 },
 
                 handleSocketMessage(data) {
@@ -347,24 +381,28 @@
                         return; 
                     }
                     
-                    if (data.type === 'move') {
-                        this.gameStarted = true;
+                    if (data.type === 'move' || data.type === 'state_sync') {
+                        this.gameStarted = data.game_started !== undefined ? data.game_started : true;
                         this.serverFen = data.fen;
                         this.board.position(data.fen);
                         this.whiteTime = data.white_time;
                         this.blackTime = data.black_time;
                         this.lastUpdateTime = Date.now();
                         this.activeTurn = data.fen.split(" ")[1] === "w" ? "white" : "black";
+                        this.isGameOver = !data.is_active;
                         
-                        // Clear draw offer after move
-                        this.drawOffer.active = false;
+                        if (data.type === 'move') {
+                            this.drawOffer.active = false;
+                        }
                         
-                        const ml = document.getElementById('moveList');
-                        const div = document.createElement('div');
-                        div.className = "text-gray-500";
-                        div.innerHTML = `${ml.children.length + 1}. <span class="text-white font-bold ml-1">${data.move}</span>`;
-                        ml.appendChild(div);
-                        ml.scrollTop = ml.scrollHeight;
+                        if (data.type === 'move') {
+                            const ml = document.getElementById('moveList');
+                            const div = document.createElement('div');
+                            div.className = "text-gray-500";
+                            div.innerHTML = `${ml.children.length + 1}. <span class="text-white font-bold ml-1">${data.move}</span>`;
+                            ml.appendChild(div);
+                            ml.scrollTop = ml.scrollHeight;
+                        }
 
                         if (data.outcome || !data.is_active) { 
                             this.handleGameEnd(data);
@@ -479,6 +517,12 @@
                 declineDraw() {
                     this.socket.send(JSON.stringify({ type: 'decline_draw' }));
                     this.drawOffer.active = false;
+                },
+
+                requestStateSync() {
+                    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+                        this.socket.send(JSON.stringify({ type: 'sync_state' }));
+                    }
                 },
 
                 selectPromotion(piece) {

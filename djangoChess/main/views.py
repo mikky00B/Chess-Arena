@@ -1,5 +1,5 @@
 from django.shortcuts import render, get_object_or_404, redirect
-from .models import Game, Profile
+from .models import Game, Profile, Tournament, TournamentMatch, TournamentParticipant
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q
 from django.contrib.auth.forms import UserCreationForm
@@ -7,6 +7,76 @@ from django.contrib.auth import login, authenticate
 from django.db import transaction
 from django.contrib import messages
 from decimal import Decimal, InvalidOperation
+from datetime import timedelta
+from django.utils import timezone
+import io
+import json
+import requests
+import chess
+import chess.pgn
+from .utils import normalize_ethereum_address
+
+
+def _daily_puzzle_position_key(board: chess.Board):
+    return (
+        board.board_fen(),
+        board.turn,
+        board.castling_xfen(),
+        board.ep_square,
+    )
+
+
+def _extract_solution_moves_from_pgn(fen: str, pgn_text: str) -> list[str]:
+    if not fen or not pgn_text:
+        return []
+    try:
+        target = chess.Board(fen)
+        game = chess.pgn.read_game(io.StringIO(pgn_text))
+        if game is None:
+            return []
+        replay = chess.Board()
+        moves = list(game.mainline_moves())
+
+        if _daily_puzzle_position_key(replay) == _daily_puzzle_position_key(target):
+            return [m.uci() for m in moves]
+
+        for idx, move in enumerate(moves):
+            replay.push(move)
+            if _daily_puzzle_position_key(replay) == _daily_puzzle_position_key(target):
+                return [m.uci() for m in moves[idx + 1 :]]
+    except Exception:
+        return []
+    return []
+
+
+def get_cached_daily_puzzle():
+    cache = getattr(get_cached_daily_puzzle, "_cache", None)
+    if cache and cache.get("expires_at") > timezone.now():
+        return cache.get("data"), None
+
+    try:
+        response = requests.get("https://api.chess.com/pub/puzzle", timeout=3.5)
+        response.raise_for_status()
+        data = response.json()
+        solution_moves = _extract_solution_moves_from_pgn(
+            data.get("fen") or "",
+            data.get("pgn") or "",
+        )
+        puzzle = {
+            "title": data.get("title") or "Chess.com Daily Puzzle",
+            "url": data.get("url"),
+            "image": data.get("image"),
+            "fen": data.get("fen"),
+            "pgn": data.get("pgn"),
+            "solution_moves": solution_moves,
+        }
+        get_cached_daily_puzzle._cache = {
+            "data": puzzle,
+            "expires_at": timezone.now() + timedelta(minutes=15),
+        }
+        return puzzle, None
+    except Exception:
+        return None, "Daily puzzle temporarily unavailable."
 
 
 def signup(request):
@@ -71,13 +141,28 @@ def lobby(request):
         .filter(Q(white_player=request.user) | Q(black_player=request.user))
         .distinct()
     )
+    my_tournaments = (
+        Tournament.objects.filter(Q(creator=request.user) | Q(participants__user=request.user))
+        .distinct()
+        .order_by("-created_at")[:8]
+    )
+    open_tournaments = (
+        Tournament.objects.filter(status__in=["inviting", "locked"], invite_only=False)
+        .exclude(creator=request.user)
+        .order_by("-created_at")[:8]
+    )
     leaderboard = Profile.objects.order_by("-rating")[:10]
+    puzzle, puzzle_error = get_cached_daily_puzzle()
 
     context = {
         "open_games": open_games,
         "my_games": my_games,
+        "my_tournaments": my_tournaments,
+        "open_tournaments": open_tournaments,
         "leaderboard": leaderboard,
         "user_ethereum_address": request.user.profile.ethereum_address,
+        "daily_puzzle": puzzle,
+        "daily_puzzle_error": puzzle_error,
     }
     return render(request, "main/lobby.html", context)
 
@@ -209,9 +294,10 @@ def join_game(request, game_id):
 def set_ethereum_address(request):
     """Allow user to set their Ethereum address."""
     if request.method == "POST":
-        ethereum_address = request.POST.get("ethereum_address", "").strip()
-
-        if not ethereum_address.startswith("0x") or len(ethereum_address) != 42:
+        ethereum_address = normalize_ethereum_address(
+            request.POST.get("ethereum_address", "")
+        )
+        if not ethereum_address:
             messages.error(request, "Invalid Ethereum address format.")
             return render(request, "main/set_address.html")
 
@@ -279,3 +365,89 @@ def profile_view(request):
         .order_by("-created_at")[:20],
     }
     return render(request, "main/profile.html", context)
+
+
+@login_required
+def tournament_create_page(request):
+    return render(request, "main/create_tournament.html")
+
+
+@login_required
+def tournament_detail_page(request, tournament_id):
+    tournament = get_object_or_404(
+        Tournament.objects.select_related("creator"),
+        id=tournament_id,
+    )
+    if not (
+        request.user == tournament.creator
+        or request.user.is_staff
+        or tournament.participants.filter(user=request.user).exists()
+        or not tournament.invite_only
+    ):
+        messages.error(request, "You are not authorized to view this tournament.")
+        return redirect("lobby")
+
+    my_participant = (
+        TournamentParticipant.objects.filter(tournament=tournament, user=request.user).first()
+    )
+    if tournament.status == "in_progress" and my_participant:
+        active_match = (
+            TournamentMatch.objects.select_related("game")
+            .filter(
+                tournament=tournament,
+                game__isnull=False,
+                game__is_active=True,
+            )
+            .filter(
+                Q(white_participant=my_participant) | Q(black_participant=my_participant)
+            )
+            .order_by("round_number", "board_number", "game_index")
+            .first()
+        )
+        if active_match and active_match.game_id:
+            return redirect("game_detail", game_id=active_match.game_id)
+
+    participants = list(
+        tournament.participants.select_related("user").order_by("-points", "seed", "id")
+    )
+    matches = list(
+        tournament.matches.select_related(
+            "white_participant__user",
+            "black_participant__user",
+            "game",
+        ).order_by("round_number", "board_number", "game_index")
+    )
+    payouts = list(
+        tournament.payouts.select_related("participant__user").order_by("rank")
+    )
+    if not my_participant:
+        my_participant = next((p for p in participants if p.user_id == request.user.id), None)
+
+    context = {
+        "tournament": tournament,
+        "participants": participants,
+        "matches": matches,
+        "payouts": payouts,
+        "my_participant": my_participant,
+        "is_tournament_owner": request.user == tournament.creator,
+        "can_moderate_tournament": request.user.is_staff,
+        "pending_invites": (
+            tournament.invites.select_related("invitee")
+            .filter(status="pending")
+            .order_by("-created_at")
+            if request.user == tournament.creator
+            else []
+        ),
+    }
+    return render(request, "main/tournament_detail.html", context)
+
+
+@login_required
+def daily_puzzle_page(request):
+    puzzle, puzzle_error = get_cached_daily_puzzle()
+    context = {
+        "daily_puzzle": puzzle,
+        "daily_puzzle_error": puzzle_error,
+        "solution_moves_json": json.dumps((puzzle or {}).get("solution_moves") or []),
+    }
+    return render(request, "main/daily_puzzle.html", context)

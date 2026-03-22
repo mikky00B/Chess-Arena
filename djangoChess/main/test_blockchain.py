@@ -68,3 +68,22 @@ def test_game_signature_fields_present_after_completion(completed_game):
     completed_game.refresh_from_db()
     assert completed_game.is_active is False
     assert completed_game.winner is not None
+
+
+@pytest.mark.django_db
+def test_elo_updates_use_pre_game_ratings(players):
+    white, black = players
+    white.profile.rating = 1600
+    black.profile.rating = 1400
+    white.profile.save(update_fields=["rating"])
+    black.profile.save(update_fields=["rating"])
+
+    game = Game.objects.create(white_player=white, black_player=black, is_active=False, winner=white)
+    game.refresh_from_db()
+
+    white.profile.refresh_from_db()
+    black.profile.refresh_from_db()
+    expected_white = calculate_elo(1600, 1400, 1)
+    expected_black = calculate_elo(1400, 1600, 0)
+    assert white.profile.rating == expected_white
+    assert black.profile.rating == expected_black

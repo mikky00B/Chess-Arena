@@ -21,7 +21,8 @@ from .blockchain_utils import (
     wei_to_eth,
 )
 from .contract_loader import CONTRACT_ABI
-from .models import Game, Profile
+from .models import Game
+from .utils import normalize_ethereum_address
 
 TX_HASH_PATTERN = re.compile(r"^0x[a-fA-F0-9]{64}$")
 
@@ -240,8 +241,8 @@ def update_ethereum_address(request):
     if data is None:
         return JsonResponse({"success": False, "message": "Invalid JSON payload"}, status=400)
 
-    ethereum_address = (data.get("ethereum_address") or "").strip()
-    if len(ethereum_address) != 42 or not ethereum_address.startswith("0x"):
+    ethereum_address = normalize_ethereum_address(data.get("ethereum_address") or "")
+    if not ethereum_address:
         return JsonResponse({"success": False, "message": "Invalid Ethereum address"}, status=400)
 
     profile = request.user.profile
@@ -256,7 +257,7 @@ def estimate_gas(request, game_id):
     if not game.winner:
         return JsonResponse({"success": False, "message": "No winner yet"}, status=400)
 
-    winner_profile = Profile.objects.get(user=game.winner)
+    winner_profile = game.winner.profile
     if not winner_profile.ethereum_address:
         return JsonResponse({"success": False, "message": "Winner has no Ethereum address"}, status=400)
 

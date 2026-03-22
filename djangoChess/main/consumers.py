@@ -6,6 +6,7 @@ from .models import Game, Move
 from .chess_logic import ChessGame
 from django.utils import timezone
 from django.db.models import Q
+from .timer_sync import sync_game_clock
 
 
 class ChessConsumer(AsyncWebsocketConsumer):
@@ -24,6 +25,7 @@ class ChessConsumer(AsyncWebsocketConsumer):
 
         await self.channel_layer.group_add(self.room_group_name, self.channel_name)
         await self.accept()
+        await self.send_state_sync()
 
     async def disconnect(self, close_code):
         await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
@@ -58,10 +60,6 @@ class ChessConsumer(AsyncWebsocketConsumer):
         elif message_type == "resign":
             if not game_obj.is_active:
                 await self.send(text_data=json.dumps({"error": "Game already ended"}))
-                return
-
-            if self.user not in [game_obj.white_player, game_obj.black_player]:
-                await self.send(text_data=json.dumps({"error": "Not authorized"}))
                 return
 
             winner = (
@@ -156,9 +154,23 @@ class ChessConsumer(AsyncWebsocketConsumer):
                 new_fen = logic.get_fen()
                 outcome = logic.get_outcome()
 
-                updated_game = await self.update_game_data(
+                update_result = await self.update_game_data(
                     game_obj, move_san, new_fen, outcome, self.user
                 )
+                updated_game = update_result["game"]
+                resolved_outcome = update_result["outcome"]
+                if not update_result["move_applied"] and resolved_outcome == "timeout":
+                    await self.channel_layer.group_send(
+                        self.room_group_name,
+                        {
+                            "type": "game_over_broadcast",
+                            "outcome": "timeout",
+                            "winner": (
+                                updated_game.winner.username if updated_game.winner else None
+                            ),
+                        },
+                    )
+                    return
 
                 await self.channel_layer.group_send(
                     self.room_group_name,
@@ -167,7 +179,7 @@ class ChessConsumer(AsyncWebsocketConsumer):
                         "move": move_san,
                         "fen": new_fen,
                         "player": self.user.username,
-                        "outcome": outcome,
+                        "outcome": resolved_outcome,
                         "white_time": float(updated_game.white_time),
                         "black_time": float(updated_game.black_time),
                         "is_active": updated_game.is_active,
@@ -184,8 +196,47 @@ class ChessConsumer(AsyncWebsocketConsumer):
                         {"error": "Invalid Move", "fen": game_obj.current_fen}
                     )
                 )
+        elif message_type == "sync_state":
+            await self.send_state_sync()
         else:
             await self.send(text_data=json.dumps({"error": "Unknown message type"}))
+
+    async def send_state_sync(self):
+        synced_game = await self.sync_and_get_game_state()
+        if not synced_game:
+            return
+        if not synced_game.is_active:
+            await self.send(
+                text_data=json.dumps(
+                    {
+                        "type": "state_sync",
+                        "fen": synced_game.current_fen,
+                        "white_time": float(synced_game.white_time),
+                        "black_time": float(synced_game.black_time),
+                        "game_started": bool(synced_game.last_move_timestamp),
+                        "is_active": False,
+                        "winner": synced_game.winner.username if synced_game.winner else None,
+                        "outcome": "timeout"
+                        if (synced_game.white_time <= 0 or synced_game.black_time <= 0)
+                        else None,
+                    }
+                )
+            )
+            return
+
+        await self.send(
+            text_data=json.dumps(
+                {
+                    "type": "state_sync",
+                    "fen": synced_game.current_fen,
+                    "white_time": float(synced_game.white_time),
+                    "black_time": float(synced_game.black_time),
+                    "game_started": bool(synced_game.last_move_timestamp),
+                    "is_active": True,
+                    "winner": None,
+                }
+            )
+        )
 
     async def chat_broadcast(self, event):
         await self.send(
@@ -227,6 +278,23 @@ class ChessConsumer(AsyncWebsocketConsumer):
         )
 
     @database_sync_to_async
+    def sync_and_get_game_state(self):
+        game_obj = (
+            Game.objects.select_related("white_player", "black_player", "winner")
+            .filter(id=self.game_id)
+            .first()
+        )
+        if not game_obj:
+            return None
+        sync_result = sync_game_clock(game_obj)
+        if sync_result["changed"]:
+            update_fields = ["white_time", "black_time", "last_move_timestamp"]
+            if sync_result["timed_out"]:
+                update_fields.extend(["is_active", "winner", "draw_offered_by"])
+            game_obj.save(update_fields=update_fields)
+        return game_obj
+
+    @database_sync_to_async
     def is_game_participant(self):
         return Game.objects.filter(id=self.game_id).filter(
             Q(white_player=self.user) | Q(black_player=self.user)
@@ -247,28 +315,15 @@ class ChessConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def update_game_data(self, game_obj, move_san, new_fen, outcome, current_player):
         now = timezone.now()
-        elapsed = 0.0
-
         if game_obj.black_player and not game_obj.last_move_timestamp:
             game_obj.last_move_timestamp = now
 
-        if game_obj.last_move_timestamp:
-            elapsed = (now - game_obj.last_move_timestamp).total_seconds()
-
-            current_turn_before_move = game_obj.current_fen.split()[1]
-            if current_turn_before_move == "w":
-                game_obj.white_time = max(0, float(game_obj.white_time) - elapsed)
-            else:
-                game_obj.black_time = max(0, float(game_obj.black_time) - elapsed)
-
-        if game_obj.white_time <= 0:
-            game_obj.is_active = False
-            game_obj.winner = game_obj.black_player
+        sync_result = sync_game_clock(game_obj, now=now)
+        elapsed = sync_result["elapsed"]
+        if sync_result["timed_out"]:
             outcome = "timeout"
-        elif game_obj.black_time <= 0:
-            game_obj.is_active = False
-            game_obj.winner = game_obj.white_player
-            outcome = "timeout"
+            game_obj.save(update_fields=["white_time", "black_time", "last_move_timestamp", "is_active", "winner", "draw_offered_by"])
+            return {"game": game_obj, "outcome": outcome, "move_applied": False}
 
         game_obj.current_fen = new_fen
         game_obj.last_move_timestamp = now
@@ -292,4 +347,4 @@ class ChessConsumer(AsyncWebsocketConsumer):
             think_time_seconds=max(0.0, float(elapsed)),
         )
 
-        return game_obj
+        return {"game": game_obj, "outcome": outcome, "move_applied": True}

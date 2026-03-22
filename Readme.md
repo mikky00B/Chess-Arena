@@ -5,8 +5,6 @@ Real-time chess platform built with Django + Channels, with optional blockchain 
 ## Current Features
 
 - Live multiplayer games over WebSockets
-- Server-validated chess moves (`python-chess`)
-- Server-managed clocks and move timing
 - Public and private game creation/join flows
 - User profiles with ratings and Ethereum address support
 - Daily puzzle page (Chess.com puzzle integration)

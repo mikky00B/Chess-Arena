@@ -1,0 +1,103 @@
+{% extends "main/base.html" %}
+
+{% block title %}Daily Puzzle{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chess.js@1.0.0/chess.min.js"></script>
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
+{% endblock %}
+
+{% block content %}
+
+<div class="row g-4">
+    <div class="col-lg-8">
+        <div class="glass-card p-4">
+            <h2 class="mb-2">Daily Puzzle</h2>
+            {% if daily_puzzle %}
+                <p class="text-muted mb-3">{{ daily_puzzle.title }}</p>
+                <div id="puzzleBoard" style="max-width: 520px;"></div>
+                <p class="mt-3 mb-1"><strong>Status:</strong> <span id="puzzleStatus">Your move.</span></p>
+                <button id="resetPuzzle" class="btn btn-outline-secondary btn-sm">Reset</button>
+            {% else %}
+                <p class="text-muted mb-0">{{ daily_puzzle_error|default:"Puzzle unavailable." }}</p>
+            {% endif %}
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="glass-card p-3">
+            <h5>How it works</h5>
+            <ul class="mb-0">
+                <li>Play the best move on the board.</li>
+                <li>The puzzle line auto-advances after correct moves.</li>
+                <li>Finish all moves to solve the puzzle.</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+{% if daily_puzzle %}
+<script>
+    (function () {
+        const puzzleFen = "{{ daily_puzzle.fen|escapejs }}";
+        const solutionMoves = {{ solution_moves_json|safe }};
+        const game = new Chess(puzzleFen);
+        const statusEl = document.getElementById("puzzleStatus");
+        const resetBtn = document.getElementById("resetPuzzle");
+        let board = null;
+        let progress = 0;
+
+        function resetPuzzle() {
+            game.load(puzzleFen);
+            progress = 0;
+            board.position(game.fen());
+            statusEl.textContent = "Your move.";
+        }
+
+        function onDrop(source, target) {
+            const move = game.move({ from: source, to: target, promotion: "q" });
+            if (!move) {
+                return "snapback";
+            }
+
+            const expectedUserMove = solutionMoves[progress];
+            if (!expectedUserMove || move.from + move.to + (move.promotion || "") !== expectedUserMove) {
+                game.undo();
+                statusEl.textContent = "Not the puzzle move. Try again.";
+                return "snapback";
+            }
+
+            progress += 1;
+            board.position(game.fen());
+
+            const expectedReply = solutionMoves[progress];
+            if (expectedReply) {
+                const reply = game.move({
+                    from: expectedReply.slice(0, 2),
+                    to: expectedReply.slice(2, 4),
+                    promotion: expectedReply.length > 4 ? expectedReply[4] : "q",
+                });
+                if (reply) {
+                    progress += 1;
+                    board.position(game.fen());
+                }
+            }
+
+            if (progress >= solutionMoves.length) {
+                statusEl.textContent = "Solved! Nice work.";
+            } else {
+                statusEl.textContent = "Correct. Find the next move.";
+            }
+        }
+
+        board = Chessboard("puzzleBoard", {
+            draggable: true,
+            position: puzzleFen,
+            onDrop: onDrop,
+        });
+        resetBtn.addEventListener("click", resetPuzzle);
+    })();
+</script>
+{% endif %}
+{% endblock %}

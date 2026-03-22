@@ -34,8 +34,10 @@ def update_rankings_on_game_end(sender, instance, **kwargs):
     else:
         score_white, score_black = 0.5, 0.5
 
-    white_profile.rating = calculate_elo(white_profile.rating, black_profile.rating, score_white)
-    black_profile.rating = calculate_elo(black_profile.rating, white_profile.rating, score_black)
+    white_rating_before = white_profile.rating
+    black_rating_before = black_profile.rating
+    white_profile.rating = calculate_elo(white_rating_before, black_rating_before, score_white)
+    black_profile.rating = calculate_elo(black_rating_before, white_rating_before, score_black)
     white_profile.save(update_fields=["rating"])
     black_profile.save(update_fields=["rating"])
 

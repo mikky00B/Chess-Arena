@@ -12,6 +12,8 @@ const ChessWeb3 = {
     gameId: {{ game.id }},
     betAmount: '{{ game.bet_amount }}',
     userAddress: '{{ user_ethereum_address }}',
+    currentAccount: null,
+    hasUserDeposited: false,
     
     // Network configurations
     networks: {
@@ -91,6 +93,8 @@ const ChessWeb3 = {
             
             // Load contract
             await this.loadContract();
+            this.currentAccount = await this.getUserAddress();
+            this.checkProfileWalletMismatch();
             
             this.updateStatus('✅ Connected to ' + networkConfig.name, 'success');
             return true;
@@ -174,6 +178,28 @@ const ChessWeb3 = {
             return accounts[0];
         }
     },
+
+    normalizeAddress(address) {
+        if (!address) return null;
+        return address.toLowerCase();
+    },
+
+    checkProfileWalletMismatch() {
+        const profileAddress = this.normalizeAddress(this.userAddress);
+        const walletAddress = this.normalizeAddress(this.currentAccount);
+        if (profileAddress && walletAddress && profileAddress !== walletAddress) {
+            this.updateStatus(
+                `⚠️ Wallet mismatch: profile ${this.userAddress} vs connected ${this.currentAccount}. Use your profile wallet to avoid claim/deposit failures.`,
+                'warning'
+            );
+        }
+    },
+
+    setDepositButtonVisibility(showDeposit) {
+        const btn = document.getElementById('deposit-btn');
+        if (!btn) return;
+        btn.style.display = showDeposit ? 'inline-block' : 'none';
+    },
     
     // Deposit ETH to contract
     async deposit() {
@@ -187,6 +213,8 @@ const ChessWeb3 = {
         try {
             const betWei = this.web3.utils.toWei(this.betAmount, 'ether');
             const userAccount = await this.getUserAddress();
+            this.currentAccount = userAccount;
+            this.checkProfileWalletMismatch();
             
             // Check balance
             const balance = await this.web3.eth.getBalance(userAccount);
@@ -207,6 +235,8 @@ const ChessWeb3 = {
             
             console.log('✅ Deposit successful:', tx.transactionHash);
             this.updateStatus('✅ Deposit confirmed!', 'success');
+            this.hasUserDeposited = true;
+            this.setDepositButtonVisibility(false);
             
             // Show block explorer link if available
             const networkConfig = this.networks[this.networkName];
@@ -230,15 +260,32 @@ const ChessWeb3 = {
         
         try {
             const challenge = await this.contract.methods.get_challenge(this.gameId).call();
+            const userAccount = await this.getUserAddress();
+            this.currentAccount = userAccount;
+            this.checkProfileWalletMismatch();
             
             const hasWhiteDeposit = challenge.player_white !== '0x0000000000000000000000000000000000000000';
             const hasBlackDeposit = challenge.player_black !== '0x0000000000000000000000000000000000000000';
             const isActive = challenge.is_active;
+            const normalizedUser = this.normalizeAddress(userAccount);
+            const normalizedWhite = this.normalizeAddress(challenge.player_white);
+            const normalizedBlack = this.normalizeAddress(challenge.player_black);
+            const isWhiteDepositor = normalizedUser && normalizedUser === normalizedWhite;
+            const isBlackDepositor = normalizedUser && normalizedUser === normalizedBlack;
+            this.hasUserDeposited = Boolean(isWhiteDepositor || isBlackDepositor);
+            this.setDepositButtonVisibility(!this.hasUserDeposited);
             
             let status = '📊 Deposit Status:\n';
             status += `White: ${hasWhiteDeposit ? '✅' : '⏳'} `;
             status += `Black: ${hasBlackDeposit ? '✅' : '⏳'} `;
             status += `Game: ${isActive ? '✅ Active' : '⏳ Waiting'}`;
+            if (this.hasUserDeposited) {
+                status += `\n✅ Your deposit is already on-chain`;
+            } else if (hasWhiteDeposit && hasBlackDeposit) {
+                status += `\nℹ️ Both deposits exist; switch to your depositing wallet if needed`;
+            } else {
+                status += `\n⏳ You still need to deposit`;
+            }
             
             this.updateStatus(status, isActive ? 'success' : 'info');
             
@@ -403,6 +450,8 @@ const ChessWeb3 = {
                 statusEl.className += 'text-red-400';
             } else if (type === 'success') {
                 statusEl.className += 'text-green-400';
+            } else if (type === 'warning') {
+                statusEl.className += 'text-yellow-400';
             } else {
                 statusEl.className += 'text-blue-400';
             }
