@@ -7,16 +7,15 @@ test:
 	pytest
 
 lint:
-	ruff check app tests
-	mypy app
+	ruff check app tests migrations
+	mypy app migrations
 
 format:
-	ruff format app tests
-	ruff check --fix app tests
+	ruff format app tests migrations
+	ruff check --fix app tests migrations
 
 migrate:
 	alembic upgrade head
 
 contracts-test:
 	pytest tests/contracts
-

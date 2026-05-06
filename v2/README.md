@@ -18,5 +18,5 @@ make format
 ```
 
 The first milestone is the backend foundation: FastAPI boot, configuration,
-health endpoints, test setup, linting, and local infrastructure.
-
+health endpoints, test setup, linting, local infrastructure, core chess domain
+logic, and database migrations.
