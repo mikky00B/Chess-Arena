@@ -51,7 +51,8 @@ This file tracks implementation progress against `V2.md`.
 - [x] Added Elo calculation using both players' pre-game ratings.
 - [x] Added guard behavior that aborted games do not change ratings.
 - [x] Persist and execute one-time rating updates through a transactional service.
-- [ ] General matchmaking.
+- [x] Added general game creation service foundation.
+- [ ] General matchmaking queue.
 - [ ] Private general games.
 - [ ] Private invite token validation.
 
@@ -66,6 +67,7 @@ This file tracks implementation progress against `V2.md`.
 - [x] Added `RatingUpdate` model.
 - [x] Added unique `RatingUpdate.game_id` constraint to enforce one-time Elo application.
 - [x] Added persistent rating application service using async SQLAlchemy sessions and row locking.
+- [x] Added general game service for wallet-free game creation.
 - [x] Added Alembic configuration.
 - [x] Added Alembic async migration environment.
 - [x] Added initial migration for:
@@ -97,6 +99,10 @@ This file tracks implementation progress against `V2.md`.
 - [x] Persistent rating application no-ops for unrated games.
 - [x] Persistent rating application requires a finished game.
 - [x] Persistent rating application rejects second application.
+- [x] General game service creates wallet-free ready games.
+- [x] General game service supports private general source type.
+- [x] General game service rejects same-player games.
+- [x] General game service starts server clock for ready general games.
 
 ## Verification Commands Passing
 
