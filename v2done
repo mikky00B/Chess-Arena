@@ -1,0 +1,133 @@
+# Chess Arena V2 Done Tracker
+
+This file tracks implementation progress against `V2.md`.
+
+## Branching
+
+- [x] Created dedicated `v2` branch.
+- [x] Pushed `v2` branch to `origin/v2`.
+
+## Phase 0: Foundation
+
+- [x] Created V2 project structure under `v2/`.
+- [x] Added `pyproject.toml` with FastAPI, SQLAlchemy, Alembic, Redis, python-chess, web3, pytest, Ruff, and mypy dependencies.
+- [x] Added `Makefile` with `dev`, `test`, `lint`, `format`, `migrate`, and `contracts-test` commands.
+- [x] Added FastAPI app factory and app entrypoint.
+- [x] Added health endpoints:
+  - `GET /health/live`
+  - `GET /health/ready`
+- [x] Added local Dockerfile and Docker Compose foundation for API, Postgres, and Redis.
+- [x] Added pytest setup and initial health tests.
+- [x] Added Ruff and mypy configuration.
+- [x] Installed V2 dev dependencies in local `v2/.venv`.
+- [x] Added V2-local `.gitignore` for generated `*.egg-info/`.
+
+## Phase 1: Core Chess System
+
+- [x] Added pure chess domain state:
+  - `GameState`
+  - `TimeControl`
+  - `MoveRecord`
+  - game status enum
+  - game result enum
+  - result reason enum
+  - source type enum
+- [x] Added pure `python-chess` engine wrapper.
+- [x] Added legal move validation.
+- [x] Added move application and FEN updates.
+- [x] Added checkmate detection.
+- [x] Added stalemate detection.
+- [x] Added insufficient material detection.
+- [x] Added threefold repetition claim detection.
+- [x] Added fifty-move rule claim detection.
+- [x] Added server-authoritative clock service.
+- [x] Clock starts when game enters `IN_PROGRESS`.
+- [x] First move consumes white clock time.
+- [x] Added timeout claim without requiring another move.
+- [x] Added move service guard: moves are rejected unless game status is `IN_PROGRESS`.
+- [x] Added turn validation.
+- [x] Added resignation handling.
+- [x] Added draw offer and draw acceptance handling.
+- [x] Added Elo calculation using both players' pre-game ratings.
+- [x] Added guard behavior that aborted games do not change ratings.
+- [x] Persist and execute one-time rating updates through a transactional service.
+- [ ] General matchmaking.
+- [ ] Private general games.
+- [ ] Private invite token validation.
+
+## Database And Migrations
+
+- [x] Added async SQLAlchemy database setup.
+- [x] Added declarative `Base`.
+- [x] Added async session dependency helper.
+- [x] Added `User` model.
+- [x] Added `Game` model.
+- [x] Added `Move` model.
+- [x] Added `RatingUpdate` model.
+- [x] Added unique `RatingUpdate.game_id` constraint to enforce one-time Elo application.
+- [x] Added persistent rating application service using async SQLAlchemy sessions and row locking.
+- [x] Added Alembic configuration.
+- [x] Added Alembic async migration environment.
+- [x] Added initial migration for:
+  - `users`
+  - `games`
+  - `moves`
+  - `rating_updates`
+- [x] Verified migration renders valid Postgres SQL offline.
+
+## Tests Implemented
+
+- [x] Health endpoint tests.
+- [x] Chess engine legal move test.
+- [x] Chess engine illegal move rejection test.
+- [x] Chess engine checkmate test.
+- [x] Clock starts immediately when game starts.
+- [x] First move consumes clock time.
+- [x] Move service rejects moves before `IN_PROGRESS`.
+- [x] Timeout can be claimed without waiting for another move.
+- [x] Timeout claim requires an actually expired clock.
+- [x] Resignation finishes game for opponent.
+- [x] Elo uses pre-game rating snapshots.
+- [x] Aborted games do not update Elo.
+- [x] Database schema registration tests.
+- [x] String enum portability tests.
+- [x] One-time rating update uniqueness test.
+- [x] Postgres schema compilation test.
+- [x] Persistent rating application updates ratings once from pre-game snapshots.
+- [x] Persistent rating application no-ops for unrated games.
+- [x] Persistent rating application requires a finished game.
+- [x] Persistent rating application rejects second application.
+
+## Verification Commands Passing
+
+- [x] `.venv\Scripts\python.exe -m pytest`
+- [x] `.venv\Scripts\ruff.exe check app tests migrations`
+- [x] `.venv\Scripts\mypy.exe app migrations`
+- [x] `.venv\Scripts\alembic.exe upgrade head --sql`
+
+## V1 Audit Regression Coverage Started
+
+- [x] P1: First move time is free.
+  - Fixed in core clock service.
+  - Covered by unit test.
+- [x] P1: Timeout requires a move.
+  - Fixed in core clock service.
+  - Covered by unit test.
+- [x] P1: Rating uses mutated opponent rating.
+  - Fixed in pure rating calculation.
+  - Covered by unit test.
+- [x] P1: Elo re-applies on later saves.
+  - Database unique constraint added.
+  - Transactional rating application service added.
+  - Covered by unit test.
+- [x] P0: Wagered game can start without escrow.
+  - Core move service rejects non-`IN_PROGRESS` games.
+  - Challenge escrow/funding gate still pending.
+- [ ] P0: Unsafe abandonment claim.
+- [ ] P1: Deposit verification not bound to player.
+- [ ] P2: Private games joinable by ID.
+
+## Commits Pushed To `origin/v2`
+
+- [x] `5d5e158 Start Chess Arena V2 foundation`
+- [x] `8db409a Add V2 database models and migration`
