@@ -1,0 +1,36 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: chess_arena
+      POSTGRES_USER: chess_arena
+      POSTGRES_PASSWORD: chess_arena
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6380:6379"
+
+  api:
+    build:
+      context: .
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
+    environment:
+      CHESS_ARENA_ENV: development
+      CHESS_ARENA_DATABASE_URL: postgresql+asyncpg://chess_arena:chess_arena@postgres:5432/chess_arena
+      CHESS_ARENA_REDIS_URL: redis://redis:6379/0
+    volumes:
+      - .:/app
+    ports:
+      - "8001:8001"
+    depends_on:
+      - postgres
+      - redis
+
+volumes:
+  postgres_data:
+
