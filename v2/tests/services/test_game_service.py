@@ -6,7 +6,7 @@ import pytest
 
 from app.game.state import GameSourceType, GameStatus, TimeControl
 from app.models import User
-from app.services.game_service import GameService, GameServiceError
+from app.services.game_service import GameService, GameServiceError, PrivateInviteError
 
 
 def make_user(username: str) -> User:
@@ -47,6 +47,62 @@ def test_build_private_general_game_uses_private_source_type() -> None:
     )
 
     assert game.source_type == GameSourceType.PRIVATE_GENERAL_GAME
+
+
+def test_private_general_game_stores_hashed_invite_token() -> None:
+    token = "invite-secret"
+    game = GameService().build_general_game(
+        white_player=make_user("white"),
+        black_player=make_user("black"),
+        time_control=TimeControl(initial_seconds=600),
+        private=True,
+        invite_token=token,
+    )
+
+    assert game.source_id is not None
+    assert game.source_id != token
+    assert len(game.source_id) == 64
+
+
+def test_private_general_game_accepts_valid_invite_token() -> None:
+    service = GameService()
+    token = "invite-secret"
+    game = service.build_general_game(
+        white_player=make_user("white"),
+        black_player=make_user("black"),
+        time_control=TimeControl(initial_seconds=600),
+        private=True,
+        invite_token=token,
+    )
+
+    service.validate_private_invite(game, invite_token=token)
+
+
+def test_private_general_game_rejects_missing_or_invalid_invite_token() -> None:
+    service = GameService()
+    game = service.build_general_game(
+        white_player=make_user("white"),
+        black_player=make_user("black"),
+        time_control=TimeControl(initial_seconds=600),
+        private=True,
+        invite_token="invite-secret",
+    )
+
+    with pytest.raises(PrivateInviteError, match="required"):
+        service.validate_private_invite(game, invite_token=None)
+
+    with pytest.raises(PrivateInviteError, match="invalid"):
+        service.validate_private_invite(game, invite_token="wrong-token")
+
+
+def test_public_general_game_does_not_require_invite_token() -> None:
+    game = GameService().build_general_game(
+        white_player=make_user("white"),
+        black_player=make_user("black"),
+        time_control=TimeControl(initial_seconds=600),
+    )
+
+    GameService().validate_private_invite(game, invite_token=None)
 
 
 def test_build_general_game_rejects_same_player() -> None:

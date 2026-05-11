@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import hmac
+import secrets
+from collections.abc import Callable
 from datetime import UTC, datetime
+from hashlib import sha256
 from uuid import UUID
 
 import chess
@@ -16,6 +20,10 @@ class GameServiceError(ValueError):
 
 
 class UserNotFoundError(GameServiceError):
+    pass
+
+
+class PrivateInviteError(GameServiceError):
     pass
 
 
@@ -59,6 +67,7 @@ class GameService:
         time_control: TimeControl,
         rated: bool = False,
         private: bool = False,
+        invite_token: str | None = None,
         now: datetime | None = None,
     ) -> Game:
         if white_player.id == black_player.id:
@@ -68,6 +77,7 @@ class GameService:
         source_type = (
             GameSourceType.PRIVATE_GENERAL_GAME if private else GameSourceType.GENERAL_MATCHMAKING
         )
+        source_id = self.hash_invite_token(invite_token) if private and invite_token else None
         return Game(
             white_player_id=white_player.id,
             black_player_id=black_player.id,
@@ -84,7 +94,7 @@ class GameService:
             result_reason=None,
             winner_id=None,
             source_type=source_type,
-            source_id=None,
+            source_id=source_id,
             draw_offered_by=None,
             created_at=created_at,
             started_at=None,
@@ -93,6 +103,31 @@ class GameService:
             white_player=white_player,
             black_player=black_player,
         )
+
+    def create_private_invite_token(
+        self,
+        *,
+        token_factory: Callable[[int], str] = secrets.token_urlsafe,
+    ) -> str:
+        return token_factory(32)
+
+    def hash_invite_token(self, invite_token: str) -> str:
+        if not invite_token:
+            raise PrivateInviteError("invite token is required")
+        return sha256(invite_token.encode("utf-8")).hexdigest()
+
+    def validate_private_invite(self, game: Game, *, invite_token: str | None) -> None:
+        if game.source_type != GameSourceType.PRIVATE_GENERAL_GAME:
+            return
+        if game.source_id is None:
+            raise PrivateInviteError("private game has no invite token")
+        if invite_token is None:
+            raise PrivateInviteError("private invite token is required")
+
+        expected = game.source_id
+        actual = self.hash_invite_token(invite_token)
+        if not hmac.compare_digest(expected, actual):
+            raise PrivateInviteError("private invite token is invalid")
 
     def start_general_game(self, game: Game, *, now: datetime | None = None) -> None:
         if game.source_type not in {

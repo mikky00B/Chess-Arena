@@ -52,9 +52,9 @@ This file tracks implementation progress against `V2.md`.
 - [x] Added guard behavior that aborted games do not change ratings.
 - [x] Persist and execute one-time rating updates through a transactional service.
 - [x] Added general game creation service foundation.
-- [ ] General matchmaking queue.
-- [ ] Private general games.
-- [ ] Private invite token validation.
+- [x] General matchmaking queue.
+- [x] Private general games.
+- [x] Private invite token validation.
 
 ## Database And Migrations
 
@@ -103,6 +103,14 @@ This file tracks implementation progress against `V2.md`.
 - [x] General game service supports private general source type.
 - [x] General game service rejects same-player games.
 - [x] General game service starts server clock for ready general games.
+- [x] Private general games store hashed invite tokens.
+- [x] Private general games reject missing or invalid invite tokens.
+- [x] Public general games do not require invite tokens.
+- [x] Matchmaking queue waits when no compatible opponent exists.
+- [x] Matchmaking queue creates general games for compatible opponents.
+- [x] Matchmaking queue separates casual and rated pools.
+- [x] Matchmaking queue rejects duplicate active tickets.
+- [x] Matchmaking queue supports canceling active tickets.
 
 ## Verification Commands Passing
 
@@ -137,3 +145,5 @@ This file tracks implementation progress against `V2.md`.
 
 - [x] `5d5e158 Start Chess Arena V2 foundation`
 - [x] `8db409a Add V2 database models and migration`
+- [x] `7cd42db Add V2 persistent rating application`
+- [x] `da5016d Add V2 general game service`
