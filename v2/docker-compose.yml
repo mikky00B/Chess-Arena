@@ -31,6 +31,24 @@ services:
       - postgres
       - redis
 
+  api-prod:
+    profiles:
+      - production
+    build:
+      context: .
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8001 --proxy-headers
+    environment:
+      CHESS_ARENA_ENV: production
+      CHESS_ARENA_DATABASE_URL: ${CHESS_ARENA_DATABASE_URL:?set CHESS_ARENA_DATABASE_URL}
+      CHESS_ARENA_REDIS_URL: ${CHESS_ARENA_REDIS_URL:?set CHESS_ARENA_REDIS_URL}
+      CHESS_ARENA_SECRET_KEY: ${CHESS_ARENA_SECRET_KEY:?set CHESS_ARENA_SECRET_KEY}
+      CHESS_ARENA_CORS_ALLOWED_ORIGINS: ${CHESS_ARENA_CORS_ALLOWED_ORIGINS:?set CHESS_ARENA_CORS_ALLOWED_ORIGINS}
+      CHESS_ARENA_STRICT_HEALTH_CHECKS: "true"
+    ports:
+      - "8001:8001"
+    depends_on:
+      - postgres
+      - redis
+
 volumes:
   postgres_data:
-

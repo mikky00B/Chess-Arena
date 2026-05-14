@@ -1,0 +1,9 @@
+[project]
+name = "chess-arena-v2-contracts"
+version = "0.1.0"
+description = "V2 challenge escrow contracts for Chess Arena"
+requires-python = ">=3.11"
+dependencies = [
+    "moccasin>=0.4.3",
+    "vyper>=0.4.3",
+]

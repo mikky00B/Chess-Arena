@@ -40,6 +40,7 @@ class GameService:
         time_control: TimeControl,
         rated: bool = False,
         private: bool = False,
+        invite_token: str | None = None,
         now: datetime | None = None,
     ) -> Game:
         white_player = await session.get(User, white_player_id)
@@ -53,6 +54,7 @@ class GameService:
             time_control=time_control,
             rated=rated,
             private=private,
+            invite_token=invite_token,
             now=now,
         )
         session.add(game)

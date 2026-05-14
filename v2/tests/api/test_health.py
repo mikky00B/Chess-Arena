@@ -21,6 +21,14 @@ def test_health_ready_reports_foundation_config() -> None:
     body = response.json()
     assert body["status"] == "ok"
     assert body["environment"]
-    assert body["database"] == "configured"
-    assert body["redis"] == "configured"
+    assert body["checks"]["app"] == "ok"
+    assert body["checks"]["database"] == "configured"
+    assert body["checks"]["redis"] == "configured"
 
+
+def test_request_id_header_is_returned() -> None:
+    client = TestClient(create_app())
+
+    response = client.get("/health/live", headers={"x-request-id": "test-request"})
+
+    assert response.headers["x-request-id"] == "test-request"

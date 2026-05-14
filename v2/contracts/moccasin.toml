@@ -1,0 +1,15 @@
+[project]
+src = "src"
+out = "out"
+
+[networks.pyevm]
+is_zksync = false
+
+[networks.anvil]
+url = "http://127.0.0.1:8545"
+chain_id = 31337
+prompt_live = false
+save_to_db = false
+
+[compiler]
+evm_version = "cancun"

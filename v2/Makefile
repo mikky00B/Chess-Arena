@@ -18,4 +18,4 @@ migrate:
 	alembic upgrade head
 
 contracts-test:
-	pytest tests/contracts
+	cd contracts && pytest tests
