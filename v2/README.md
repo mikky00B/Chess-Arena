@@ -1,8 +1,7 @@
 # Chess Arena V2
 
-Chess Arena V2 is the active FastAPI/React rewrite of the original Django chess
-application. It is designed as a chess platform first, with optional competitive
-and Web3 modes layered on top.
+Chess Arena V2 is the active FastAPI/React chess platform. It is designed as a
+chess platform first, with optional competitive and Web3 modes layered on top.
 
 The product is split into three clear modes:
 
@@ -13,8 +12,8 @@ The product is split into three clear modes:
 - Tournaments: organizer-created events that reuse the core game engine and can
   track prizes or rewards.
 
-The legacy Django app remains in `../djangoChess` while V2 is being promoted to
-the repository default branch.
+This branch is intentionally V2-only. Legacy Django and older contract code
+belong on the legacy branch, not here.
 
 ## Requirements
 
