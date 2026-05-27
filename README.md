@@ -132,8 +132,3 @@ npm run lint
 - Fair play and ops: `/api/fair-play/...`, `/api/admin/...`
 - WebSocket gameplay: `/ws/games/{game_id}`
 
-## Production Notes
-
-Development defaults are local-only. Production mode rejects unsafe defaults,
-including local database credentials, localhost Redis, wildcard CORS origins,
-and weak secret keys.
